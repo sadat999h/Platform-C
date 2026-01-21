@@ -18,6 +18,7 @@ export default function handler(req, res) {
             background: #1a1a1a;
             color: white;
             min-height: 100vh;
+            user-select: none;
         }
         .header {
             background: #2a2a2a;
@@ -131,13 +132,96 @@ export default function handler(req, res) {
             border-radius: 8px;
             margin-bottom: 20px;
         }
-        .video-container iframe {
+        .video-container iframe,
+        .video-container video {
             position: absolute;
             top: 0;
             left: 0;
             width: 100%;
             height: 100%;
             border: none;
+        }
+        .video-container video {
+            object-fit: contain;
+        }
+        .custom-controls {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: linear-gradient(transparent, rgba(0,0,0,0.8));
+            padding: 20px 15px 10px;
+            opacity: 0;
+            transition: opacity 0.3s;
+            z-index: 10;
+        }
+        .video-container:hover .custom-controls {
+            opacity: 1;
+        }
+        .progress-bar {
+            width: 100%;
+            height: 5px;
+            background: rgba(255,255,255,0.3);
+            border-radius: 3px;
+            margin-bottom: 10px;
+            cursor: pointer;
+            position: relative;
+        }
+        .progress-filled {
+            height: 100%;
+            background: #667eea;
+            border-radius: 3px;
+            width: 0%;
+            transition: width 0.1s;
+        }
+        .controls-bottom {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        .play-btn {
+            background: none;
+            border: none;
+            color: white;
+            font-size: 24px;
+            cursor: pointer;
+            padding: 0;
+            width: 30px;
+            height: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .time-display {
+            color: white;
+            font-size: 14px;
+            min-width: 100px;
+        }
+        .volume-control {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .volume-btn {
+            background: none;
+            border: none;
+            color: white;
+            font-size: 20px;
+            cursor: pointer;
+            padding: 0;
+        }
+        .volume-slider {
+            width: 80px;
+            cursor: pointer;
+        }
+        .fullscreen-btn {
+            background: none;
+            border: none;
+            color: white;
+            font-size: 20px;
+            cursor: pointer;
+            padding: 0;
+            margin-left: auto;
         }
         .video-info {
             background: #1a1a1a;
@@ -216,9 +300,18 @@ export default function handler(req, res) {
             color: white;
             margin-left: 10px;
         }
+        .no-context-menu {
+            pointer-events: none;
+        }
+        video::-webkit-media-controls {
+            display: none !important;
+        }
+        video::-webkit-media-controls-enclosure {
+            display: none !important;
+        }
     </style>
 </head>
-<body>
+<body oncontextmenu="return false;">
     <div class="header">
         <div class="header-content">
             <h1>Platform C</h1>
@@ -231,8 +324,7 @@ export default function handler(req, res) {
             <div class="info-box">
                 <div class="info-box-title">🛡️ Security Active</div>
                 <div class="info-box-text">
-                    This platform securely fetches videos using encrypted URLs. 
-                    Original video sources from Platform A (YouTube, Google Drive, etc.) remain completely hidden.
+                    Custom video player with full control. No external branding, no URL exposure.
                 </div>
             </div>
             
@@ -262,8 +354,24 @@ export default function handler(req, res) {
                 </div>
                 <button class="close-btn" onclick="closeVideo()">Close</button>
             </div>
-            <div class="video-container">
-                <iframe id="videoPlayer" allowfullscreen allow="autoplay; encrypted-media"></iframe>
+            <div class="video-container" id="videoContainer">
+                <video id="videoPlayer" playsinline oncontextmenu="return false;"></video>
+                <iframe id="iframePlayer" style="display:none;" allowfullscreen allow="autoplay; encrypted-media"></iframe>
+                
+                <div class="custom-controls" id="customControls">
+                    <div class="progress-bar" id="progressBar">
+                        <div class="progress-filled" id="progressFilled"></div>
+                    </div>
+                    <div class="controls-bottom">
+                        <button class="play-btn" id="playBtn">▶️</button>
+                        <span class="time-display" id="timeDisplay">0:00 / 0:00</span>
+                        <div class="volume-control">
+                            <button class="volume-btn" id="volumeBtn">🔊</button>
+                            <input type="range" class="volume-slider" id="volumeSlider" min="0" max="100" value="100">
+                        </div>
+                        <button class="fullscreen-btn" id="fullscreenBtn">⛶</button>
+                    </div>
+                </div>
             </div>
             <div class="video-info">
                 <div class="video-info-item">
@@ -279,8 +387,8 @@ export default function handler(req, res) {
                     <span style="color: #4caf50;">✓ Securely Loaded</span>
                 </div>
                 <div class="video-info-item">
-                    <span class="video-info-label">Security:</span>
-                    <span>Original URL hidden from client</span>
+                    <span class="video-info-label">Protection:</span>
+                    <span>Custom player • URL hidden • Right-click disabled</span>
                 </div>
             </div>
         </div>
@@ -290,13 +398,28 @@ export default function handler(req, res) {
         const SECURITY_STRING = '${securityString}';
         let currentVideoUrl = '';
         let currentVideoId = '';
+        let videoType = '';
+        let videoElement = null;
+        let iframeElement = null;
+
+        // Disable right-click globally
+        document.addEventListener('contextmenu', e => e.preventDefault());
+        
+        // Disable keyboard shortcuts for video inspection
+        document.addEventListener('keydown', e => {
+            if (e.key === 'F12' || (e.ctrlKey && e.shiftKey && e.key === 'I') || 
+                (e.ctrlKey && e.shiftKey && e.key === 'C') || (e.ctrlKey && e.key === 'u')) {
+                e.preventDefault();
+            }
+        });
 
         async function loadVideo() {
             const videoUrlInput = document.getElementById('videoUrl').value.trim();
             const errorEl = document.getElementById('error');
             const loadingSection = document.getElementById('loadingSection');
             const videoSection = document.getElementById('videoSection');
-            const videoPlayer = document.getElementById('videoPlayer');
+            videoElement = document.getElementById('videoPlayer');
+            iframeElement = document.getElementById('iframePlayer');
             const loadBtn = document.getElementById('loadBtn');
 
             if (!videoUrlInput) {
@@ -337,11 +460,34 @@ export default function handler(req, res) {
                 if (data.success && data.embeddableUrl) {
                     currentVideoUrl = data.embeddableUrl;
                     currentVideoId = data.videoId || videoId;
+                    videoType = data.videoType;
                     
-                    videoPlayer.src = currentVideoUrl;
                     document.getElementById('videoId').textContent = currentVideoId;
-                    document.getElementById('videoTypeText').textContent = data.videoType.toUpperCase();
-                    document.getElementById('typeBadge').textContent = data.videoType.toUpperCase();
+                    document.getElementById('videoTypeText').textContent = videoType.toUpperCase();
+                    document.getElementById('typeBadge').textContent = videoType.toUpperCase();
+                    
+                    // Use custom player for direct videos, iframe for others
+                    if (videoType === 'direct' || videoType === 'gdrive') {
+                        videoElement.style.display = 'block';
+                        iframeElement.style.display = 'none';
+                        videoElement.src = currentVideoUrl;
+                        initCustomControls();
+                    } else {
+                        // For YouTube, Vimeo, etc. - use iframe without controls
+                        videoElement.style.display = 'none';
+                        iframeElement.style.display = 'block';
+                        
+                        // Modify URL to hide controls
+                        let modifiedUrl = currentVideoUrl;
+                        if (videoType === 'youtube') {
+                            modifiedUrl += '?autoplay=0&controls=0&showinfo=0&rel=0&modestbranding=1&iv_load_policy=3';
+                        } else if (videoType === 'vimeo') {
+                            modifiedUrl += '?title=0&byline=0&portrait=0&controls=0';
+                        }
+                        
+                        iframeElement.src = modifiedUrl;
+                        document.getElementById('customControls').style.display = 'none';
+                    }
                     
                     loadingSection.style.display = 'none';
                     videoSection.classList.add('active');
@@ -358,12 +504,101 @@ export default function handler(req, res) {
             }
         }
 
+        function initCustomControls() {
+            const video = videoElement;
+            const playBtn = document.getElementById('playBtn');
+            const progressBar = document.getElementById('progressBar');
+            const progressFilled = document.getElementById('progressFilled');
+            const timeDisplay = document.getElementById('timeDisplay');
+            const volumeBtn = document.getElementById('volumeBtn');
+            const volumeSlider = document.getElementById('volumeSlider');
+            const fullscreenBtn = document.getElementById('fullscreenBtn');
+            const container = document.getElementById('videoContainer');
+
+            // Play/Pause
+            playBtn.addEventListener('click', () => {
+                if (video.paused) {
+                    video.play();
+                    playBtn.textContent = '⏸️';
+                } else {
+                    video.pause();
+                    playBtn.textContent = '▶️';
+                }
+            });
+
+            // Update progress
+            video.addEventListener('timeupdate', () => {
+                const percent = (video.currentTime / video.duration) * 100;
+                progressFilled.style.width = percent + '%';
+                timeDisplay.textContent = \`\${formatTime(video.currentTime)} / \${formatTime(video.duration)}\`;
+            });
+
+            // Seek
+            progressBar.addEventListener('click', (e) => {
+                const rect = progressBar.getBoundingClientRect();
+                const pos = (e.clientX - rect.left) / rect.width;
+                video.currentTime = pos * video.duration;
+            });
+
+            // Volume
+            volumeSlider.addEventListener('input', (e) => {
+                video.volume = e.target.value / 100;
+                updateVolumeIcon(e.target.value);
+            });
+
+            volumeBtn.addEventListener('click', () => {
+                if (video.volume > 0) {
+                    video.volume = 0;
+                    volumeSlider.value = 0;
+                    volumeBtn.textContent = '🔇';
+                } else {
+                    video.volume = 1;
+                    volumeSlider.value = 100;
+                    volumeBtn.textContent = '🔊';
+                }
+            });
+
+            // Fullscreen
+            fullscreenBtn.addEventListener('click', () => {
+                if (!document.fullscreenElement) {
+                    container.requestFullscreen();
+                } else {
+                    document.exitFullscreen();
+                }
+            });
+
+            // Click to play/pause
+            video.addEventListener('click', () => {
+                if (video.paused) {
+                    video.play();
+                    playBtn.textContent = '⏸️';
+                } else {
+                    video.pause();
+                    playBtn.textContent = '▶️';
+                }
+            });
+        }
+
+        function formatTime(seconds) {
+            if (isNaN(seconds)) return '0:00';
+            const mins = Math.floor(seconds / 60);
+            const secs = Math.floor(seconds % 60);
+            return \`\${mins}:\${secs.toString().padStart(2, '0')}\`;
+        }
+
+        function updateVolumeIcon(value) {
+            const volumeBtn = document.getElementById('volumeBtn');
+            if (value == 0) volumeBtn.textContent = '🔇';
+            else if (value < 50) volumeBtn.textContent = '🔉';
+            else volumeBtn.textContent = '🔊';
+        }
+
         function closeVideo() {
             const videoSection = document.getElementById('videoSection');
-            const videoPlayer = document.getElementById('videoPlayer');
             
             videoSection.classList.remove('active');
-            videoPlayer.src = '';
+            if (videoElement) videoElement.src = '';
+            if (iframeElement) iframeElement.src = '';
             currentVideoUrl = '';
             currentVideoId = '';
             
