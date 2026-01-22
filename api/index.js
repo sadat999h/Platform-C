@@ -160,12 +160,15 @@ export default function handler(req, res) {
             border-radius: 16px;
             box-shadow: 0 10px 40px rgba(0,0,0,0.5);
         }
-        video {
+        video, iframe {
             position: absolute;
             top: 0;
             left: 0;
             width: 100%;
             height: 100%;
+            border: none;
+        }
+        video {
             object-fit: contain;
         }
         .custom-controls {
@@ -338,7 +341,7 @@ export default function handler(req, res) {
     <div class="header">
         <div class="header-content">
             <div class="logo">🎬 Video Player</div>
-            <div class="status-badge">🔒 Secure Streaming</div>
+            <div class="status-badge">🔒 Fast Streaming</div>
         </div>
     </div>
 
@@ -349,10 +352,10 @@ export default function handler(req, res) {
                 <input 
                     type="url" 
                     id="videoUrl" 
-                    placeholder="Paste your secure video URL here..."
+                    placeholder="Paste your encrypted video URL here..."
                     onkeypress="handleEnter(event)"
                 >
-                <div class="info-text">Enter the secure URL from Platform B</div>
+                <div class="info-text">⚡ Optimized for large files • Fast chunked streaming</div>
             </div>
             <button class="btn" onclick="loadVideo()" id="loadBtn">▶️ Load Video</button>
             <div id="error" class="error" style="display: none;"></div>
@@ -376,9 +379,16 @@ export default function handler(req, res) {
                 <video 
                     id="videoPlayer" 
                     playsinline 
-                    preload="auto"
-                    oncontextmenu="return false;">
+                    preload="metadata"
+                    oncontextmenu="return false;"
+                    style="display: none;">
                 </video>
+                <iframe 
+                    id="iframePlayer" 
+                    allowfullscreen 
+                    allow="autoplay; encrypted-media"
+                    style="display: none;">
+                </iframe>
                 
                 <div class="custom-controls" id="customControls">
                     <div class="progress-container" id="progressContainer">
@@ -401,9 +411,10 @@ export default function handler(req, res) {
     <script>
         const SECURITY_STRING = '${securityString}';
         let video = null;
+        let iframe = null;
         let isPlaying = false;
+        let useIframe = false;
 
-        // Disable right-click and keyboard shortcuts
         document.addEventListener('contextmenu', e => e.preventDefault());
         document.addEventListener('keydown', e => {
             if (e.key === 'F12' || (e.ctrlKey && e.shiftKey && e.key === 'I') || 
@@ -418,6 +429,7 @@ export default function handler(req, res) {
             const loadingSection = document.getElementById('loadingSection');
             const videoSection = document.getElementById('videoSection');
             video = document.getElementById('videoPlayer');
+            iframe = document.getElementById('iframePlayer');
             const loadBtn = document.getElementById('loadBtn');
 
             if (!videoUrlInput) {
@@ -447,37 +459,74 @@ export default function handler(req, res) {
 
                 const data = await response.json();
 
-                if (data.success && data.proxyUrl) {
-                    // Use proxy URL which bypasses CORS
-                    const proxyStream = data.proxyUrl + '?t=' + Date.now();
-                    
-                    // Create video source with security headers via fetch
-                    const videoResponse = await fetch(proxyStream, {
-                        headers: { 'X-Security-String': SECURITY_STRING }
-                    });
-                    
-                    if (!videoResponse.ok) {
-                        throw new Error('Failed to fetch video stream');
-                    }
-                    
-                    const blob = await videoResponse.blob();
-                    const videoUrl = URL.createObjectURL(blob);
-                    
-                    video.src = videoUrl;
-                    video.load();
-                    
-                    initControls();
-                    
-                    loadingSection.style.display = 'none';
-                    videoSection.classList.add('active');
-                    videoSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                } else {
+                if (!data.success) {
                     throw new Error(data.message || 'Failed to load video');
                 }
+
+                useIframe = data.useIframe;
+
+                if (useIframe) {
+                    // For YouTube, Vimeo, Dailymotion - use iframe
+                    iframe.src = data.streamUrl;
+                    iframe.style.display = 'block';
+                    video.style.display = 'none';
+                    document.getElementById('customControls').style.display = 'none';
+                } else {
+                    // For Dropbox, GDrive - use fast streaming with range support
+                    const proxyUrl = data.proxyUrl + '?t=' + Date.now();
+                    
+                    // Set video source directly to proxy URL for range request support
+                    const videoElement = document.createElement('video');
+                    videoElement.id = 'videoPlayer';
+                    videoElement.playsinline = true;
+                    videoElement.preload = 'metadata';
+                    videoElement.oncontextmenu = () => false;
+                    
+                    // Replace old video element
+                    video.parentNode.replaceChild(videoElement, video);
+                    video = videoElement;
+                    
+                    // Create custom fetch with security headers for HLS/streaming
+                    video.crossOrigin = 'anonymous';
+                    
+                    // Directly set the proxy URL - browser will handle range requests
+                    const streamUrl = new URL(proxyUrl);
+                    streamUrl.searchParams.set('sec', SECURITY_STRING);
+                    
+                    // Use proxy URL directly with proper headers
+                    fetch(proxyUrl, {
+                        method: 'HEAD',
+                        headers: { 'X-Security-String': SECURITY_STRING }
+                    }).then(response => {
+                        if (response.ok) {
+                            // Set source directly - browser handles range requests
+                            video.src = proxyUrl;
+                            video.load();
+                            
+                            video.addEventListener('loadedmetadata', () => {
+                                loadingSection.style.display = 'none';
+                                videoSection.classList.add('active');
+                                videoSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                            });
+                            
+                            video.addEventListener('error', (e) => {
+                                console.error('Video error:', e);
+                                loadingSection.style.display = 'none';
+                                showError('Failed to load video stream');
+                            });
+                        }
+                    });
+                    
+                    iframe.style.display = 'none';
+                    video.style.display = 'block';
+                    document.getElementById('customControls').style.display = 'block';
+                    initControls();
+                }
+
+                loadBtn.disabled = false;
             } catch (error) {
                 loadingSection.style.display = 'none';
                 showError('Error loading video: ' + error.message);
-            } finally {
                 loadBtn.disabled = false;
             }
         }
@@ -493,7 +542,6 @@ export default function handler(req, res) {
             const wrapper = document.getElementById('playerWrapper');
             const bufferIndicator = document.getElementById('bufferIndicator');
 
-            // Play/Pause
             playBtn.addEventListener('click', togglePlay);
             video.addEventListener('click', togglePlay);
 
@@ -511,20 +559,10 @@ export default function handler(req, res) {
                 }
             }
 
-            // Show buffer indicator
-            video.addEventListener('waiting', () => {
-                bufferIndicator.classList.add('show');
-            });
+            video.addEventListener('waiting', () => bufferIndicator.classList.add('show'));
+            video.addEventListener('canplay', () => bufferIndicator.classList.remove('show'));
+            video.addEventListener('playing', () => bufferIndicator.classList.remove('show'));
 
-            video.addEventListener('canplay', () => {
-                bufferIndicator.classList.remove('show');
-            });
-
-            video.addEventListener('playing', () => {
-                bufferIndicator.classList.remove('show');
-            });
-
-            // Update progress
             video.addEventListener('timeupdate', () => {
                 if (video.duration && !isNaN(video.duration)) {
                     const percent = (video.currentTime / video.duration) * 100;
@@ -533,7 +571,6 @@ export default function handler(req, res) {
                 }
             });
 
-            // Seek
             progressContainer.addEventListener('click', (e) => {
                 if (video.duration && !isNaN(video.duration)) {
                     const rect = progressContainer.getBoundingClientRect();
@@ -542,7 +579,6 @@ export default function handler(req, res) {
                 }
             });
 
-            // Volume
             volumeSlider.addEventListener('input', (e) => {
                 video.volume = e.target.value / 100;
                 updateVolumeIcon(e.target.value);
@@ -559,7 +595,6 @@ export default function handler(req, res) {
                 updateVolumeIcon(volumeSlider.value);
             });
 
-            // Fullscreen
             fullscreenBtn.addEventListener('click', () => {
                 if (!document.fullscreenElement) {
                     wrapper.requestFullscreen().catch(err => console.log(err));
@@ -568,20 +603,17 @@ export default function handler(req, res) {
                 }
             });
 
-            // Keyboard shortcuts
             document.addEventListener('keydown', (e) => {
-                if (videoSection.classList.contains('active')) {
+                if (document.getElementById('videoSection').classList.contains('active')) {
                     if (e.code === 'Space') {
                         e.preventDefault();
                         togglePlay();
                     }
-                    if (e.code === 'ArrowLeft') {
-                        if (video.currentTime) video.currentTime -= 5;
+                    if (e.code === 'ArrowLeft' && video.currentTime) {
+                        video.currentTime -= 5;
                     }
-                    if (e.code === 'ArrowRight') {
-                        if (video.currentTime && video.duration) {
-                            video.currentTime = Math.min(video.currentTime + 5, video.duration);
-                        }
+                    if (e.code === 'ArrowRight' && video.currentTime && video.duration) {
+                        video.currentTime = Math.min(video.currentTime + 5, video.duration);
                     }
                 }
             });
@@ -607,6 +639,9 @@ export default function handler(req, res) {
             if (video) {
                 video.pause();
                 video.src = '';
+            }
+            if (iframe) {
+                iframe.src = '';
             }
             isPlaying = false;
             window.scrollTo({ top: 0, behavior: 'smooth' });
