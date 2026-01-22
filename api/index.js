@@ -376,8 +376,7 @@ export default function handler(req, res) {
                 <video 
                     id="videoPlayer" 
                     playsinline 
-                    preload="metadata" 
-                    crossorigin="anonymous"
+                    preload="auto"
                     oncontextmenu="return false;">
                 </video>
                 
@@ -448,9 +447,23 @@ export default function handler(req, res) {
 
                 const data = await response.json();
 
-                if (data.success && data.streamUrl) {
-                    // Set video source - Dropbox raw URLs work directly in video tag
-                    video.src = data.streamUrl;
+                if (data.success && data.proxyUrl) {
+                    // Use proxy URL which bypasses CORS
+                    const proxyStream = data.proxyUrl + '?t=' + Date.now();
+                    
+                    // Create video source with security headers via fetch
+                    const videoResponse = await fetch(proxyStream, {
+                        headers: { 'X-Security-String': SECURITY_STRING }
+                    });
+                    
+                    if (!videoResponse.ok) {
+                        throw new Error('Failed to fetch video stream');
+                    }
+                    
+                    const blob = await videoResponse.blob();
+                    const videoUrl = URL.createObjectURL(blob);
+                    
+                    video.src = videoUrl;
                     video.load();
                     
                     initControls();
@@ -513,16 +526,20 @@ export default function handler(req, res) {
 
             // Update progress
             video.addEventListener('timeupdate', () => {
-                const percent = (video.currentTime / video.duration) * 100;
-                progressBar.style.width = percent + '%';
-                timeDisplay.textContent = \`\${formatTime(video.currentTime)} / \${formatTime(video.duration)}\`;
+                if (video.duration && !isNaN(video.duration)) {
+                    const percent = (video.currentTime / video.duration) * 100;
+                    progressBar.style.width = percent + '%';
+                    timeDisplay.textContent = \`\${formatTime(video.currentTime)} / \${formatTime(video.duration)}\`;
+                }
             });
 
             // Seek
             progressContainer.addEventListener('click', (e) => {
-                const rect = progressContainer.getBoundingClientRect();
-                const pos = (e.clientX - rect.left) / rect.width;
-                video.currentTime = pos * video.duration;
+                if (video.duration && !isNaN(video.duration)) {
+                    const rect = progressContainer.getBoundingClientRect();
+                    const pos = (e.clientX - rect.left) / rect.width;
+                    video.currentTime = pos * video.duration;
+                }
             });
 
             // Volume
@@ -559,17 +576,19 @@ export default function handler(req, res) {
                         togglePlay();
                     }
                     if (e.code === 'ArrowLeft') {
-                        video.currentTime -= 5;
+                        if (video.currentTime) video.currentTime -= 5;
                     }
                     if (e.code === 'ArrowRight') {
-                        video.currentTime += 5;
+                        if (video.currentTime && video.duration) {
+                            video.currentTime = Math.min(video.currentTime + 5, video.duration);
+                        }
                     }
                 }
             });
         }
 
         function formatTime(seconds) {
-            if (isNaN(seconds)) return '0:00';
+            if (isNaN(seconds) || !isFinite(seconds)) return '0:00';
             const mins = Math.floor(seconds / 60);
             const secs = Math.floor(seconds % 60);
             return \`\${mins}:\${secs.toString().padStart(2, '0')}\`;
