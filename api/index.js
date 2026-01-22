@@ -179,7 +179,8 @@ export default function handler(req, res) {
             transition: opacity 0.3s;
             z-index: 10;
         }
-        .player-wrapper:hover .custom-controls {
+        .player-wrapper:hover .custom-controls,
+        .player-wrapper.playing .custom-controls {
             opacity: 1;
         }
         .progress-container {
@@ -320,6 +321,17 @@ export default function handler(req, res) {
             color: white;
             z-index: 5;
         }
+        .buffer-indicator {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            display: none;
+            z-index: 15;
+        }
+        .buffer-indicator.show {
+            display: block;
+        }
     </style>
 </head>
 <body oncontextmenu="return false;">
@@ -358,7 +370,16 @@ export default function handler(req, res) {
             </div>
             <div class="player-wrapper" id="playerWrapper">
                 <div class="quality-badge">HD Quality</div>
-                <video id="videoPlayer" playsinline preload="metadata" oncontextmenu="return false;"></video>
+                <div class="buffer-indicator" id="bufferIndicator">
+                    <div class="spinner"></div>
+                </div>
+                <video 
+                    id="videoPlayer" 
+                    playsinline 
+                    preload="metadata" 
+                    crossorigin="anonymous"
+                    oncontextmenu="return false;">
+                </video>
                 
                 <div class="custom-controls" id="customControls">
                     <div class="progress-container" id="progressContainer">
@@ -381,6 +402,7 @@ export default function handler(req, res) {
     <script>
         const SECURITY_STRING = '${securityString}';
         let video = null;
+        let isPlaying = false;
 
         // Disable right-click and keyboard shortcuts
         document.addEventListener('contextmenu', e => e.preventDefault());
@@ -427,7 +449,7 @@ export default function handler(req, res) {
                 const data = await response.json();
 
                 if (data.success && data.streamUrl) {
-                    // Use direct stream URL for fastest loading
+                    // Set video source - Dropbox raw URLs work directly in video tag
                     video.src = data.streamUrl;
                     video.load();
                     
@@ -456,6 +478,7 @@ export default function handler(req, res) {
             const volumeSlider = document.getElementById('volumeSlider');
             const fullscreenBtn = document.getElementById('fullscreenBtn');
             const wrapper = document.getElementById('playerWrapper');
+            const bufferIndicator = document.getElementById('bufferIndicator');
 
             // Play/Pause
             playBtn.addEventListener('click', togglePlay);
@@ -465,11 +488,28 @@ export default function handler(req, res) {
                 if (video.paused) {
                     video.play();
                     playBtn.textContent = '⏸️';
+                    isPlaying = true;
+                    wrapper.classList.add('playing');
                 } else {
                     video.pause();
                     playBtn.textContent = '▶️';
+                    isPlaying = false;
+                    wrapper.classList.remove('playing');
                 }
             }
+
+            // Show buffer indicator
+            video.addEventListener('waiting', () => {
+                bufferIndicator.classList.add('show');
+            });
+
+            video.addEventListener('canplay', () => {
+                bufferIndicator.classList.remove('show');
+            });
+
+            video.addEventListener('playing', () => {
+                bufferIndicator.classList.remove('show');
+            });
 
             // Update progress
             video.addEventListener('timeupdate', () => {
@@ -549,6 +589,7 @@ export default function handler(req, res) {
                 video.pause();
                 video.src = '';
             }
+            isPlaying = false;
             window.scrollTo({ top: 0, behavior: 'smooth' });
         }
 
