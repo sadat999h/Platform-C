@@ -414,6 +414,7 @@ export default function handler(req, res) {
         let iframe = null;
         let isPlaying = false;
         let useIframe = false;
+        let currentProxyUrl = '';
 
         document.addEventListener('contextmenu', function(e) { e.preventDefault(); });
         document.addEventListener('keydown', function(e) {
@@ -475,11 +476,15 @@ export default function handler(req, res) {
                     videoSection.classList.add('active');
                     videoSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
                 } else {
-                    const proxyUrl = data.proxyUrl;
+                    currentProxyUrl = data.proxyUrl;
                     
                     video.style.display = 'block';
                     iframe.style.display = 'none';
                     document.getElementById('customControls').style.display = 'block';
+                    
+                    // Fetch video as blob to avoid CORS and add security header
+                    const videoBlob = await fetchVideoAsBlob(currentProxyUrl);
+                    const blobUrl = URL.createObjectURL(videoBlob);
                     
                     video.addEventListener('loadedmetadata', function() {
                         loadingSection.style.display = 'none';
@@ -490,10 +495,10 @@ export default function handler(req, res) {
                     video.addEventListener('error', function(e) {
                         console.error('Video error:', e);
                         loadingSection.style.display = 'none';
-                        showError('Failed to load video. Check console for details.');
+                        showError('Failed to load video. The video file may be too large or inaccessible.');
                     }, { once: true });
                     
-                    video.src = proxyUrl;
+                    video.src = blobUrl;
                     video.load();
                     
                     initControls();
@@ -506,6 +511,18 @@ export default function handler(req, res) {
                 showError('Error loading video: ' + error.message);
                 loadBtn.disabled = false;
             }
+        }
+
+        async function fetchVideoAsBlob(url) {
+            const response = await fetch(url, {
+                headers: { 'X-Security-String': SECURITY_STRING }
+            });
+            
+            if (!response.ok) {
+                throw new Error('Failed to fetch video: ' + response.status + ' ' + response.statusText);
+            }
+            
+            return await response.blob();
         }
 
         function initControls() {
@@ -624,6 +641,9 @@ export default function handler(req, res) {
             videoSection.classList.remove('active');
             if (video) {
                 video.pause();
+                if (video.src && video.src.startsWith('blob:')) {
+                    URL.revokeObjectURL(video.src);
+                }
                 video.src = '';
             }
             if (iframe) {
@@ -639,7 +659,7 @@ export default function handler(req, res) {
             errorEl.style.display = 'block';
             setTimeout(function() { 
                 errorEl.style.display = 'none'; 
-            }, 5000);
+            }, 8000);
         }
 
         function handleEnter(event) {
