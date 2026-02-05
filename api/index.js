@@ -1,6 +1,6 @@
 // api/index.js - Platform C Player
 // CHANGE THIS to match Platform B's security string
-const MASTER_SECURITY_STRING = 'ULTRA_SECRET_KEY_12345_CHANGE_THIS';
+const MASTER_SECURITY_STRING = '84418779257393762955868022673598';
 
 export default function handler(req, res) {
   const html = `<!DOCTYPE html>
