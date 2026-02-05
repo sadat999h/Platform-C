@@ -193,6 +193,12 @@ export default function handler(req, res) {
         let vid = null;
         let ifr = null;
 
+        // NEW: URL normalization function
+        function normalizeUrl(url) {
+            // Remove double slashes (except after protocol)
+            return url.replace(/([^:]\/)\/+/g, '$1');
+        }
+
         async function loadVideo() {
             const url = document.getElementById('videoUrl').value.trim();
             const err = document.getElementById('error');
@@ -202,33 +208,55 @@ export default function handler(req, res) {
             ifr = document.getElementById('iframePlayer');
             const btn = document.getElementById('loadBtn');
 
+            // ✅ Better validation
             if (!url || !url.includes('/video/')) {
-                err.textContent = '❌ Invalid URL';
+                err.textContent = '❌ Invalid URL - Must contain /video/';
                 err.style.display = 'block';
                 return;
             }
 
+            // ✅ Extract video ID properly
+            const videoMatch = url.match(/\/video\/([^/?#]+)/);
+            if (!videoMatch) {
+                err.textContent = '❌ Could not extract video ID from URL';
+                err.style.display = 'block';
+                return;
+            }
+
+            const videoId = videoMatch[1];
+            const baseUrl = url.substring(0, url.indexOf('/video/'));
+
+            // ✅ Normalize URL to prevent double slashes
+            const apiUrl = normalizeUrl(baseUrl + '/api/video/' + videoId);
+
+            console.log('Fetching from:', apiUrl);  // ✅ Debug logging
+
+            // Prepare UI
             err.style.display = 'none';
             sec.classList.remove('active');
             load.style.display = 'block';
             btn.disabled = true;
 
             try {
-                const parts = url.split('/');
-                const id = parts[parts.length - 1];
-                const base = url.substring(0, url.lastIndexOf('/video/'));
-                
-                const res = await fetch(base + '/api/video/' + id, {
-                    headers: { 'X-Security-String': SEC }
+                const res = await fetch(apiUrl, {
+                    method: 'GET',  // ✅ Explicit method
+                    headers: { 
+                        'X-Security-String': SEC,
+                        'Content-Type': 'application/json'  // ✅ Added Content-Type
+                    }
                 });
-                
-                if (!res.ok) throw new Error('Failed to fetch: ' + res.status);
-                
+
+                // ✅ Better error handling
+                if (!res.ok) {
+                    const errorText = await res.text();
+                    throw new Error('Failed to fetch video (Status: ' + res.status + ')');
+                }
+
                 const data = await res.json();
                 if (!data.success) throw new Error(data.message || 'Failed');
 
                 const proxyUrl = data.proxyUrl + '?key=' + encodeURIComponent(SEC);
-                
+
                 if (data.type === 'embed') {
                     ifr.src = proxyUrl;
                     ifr.style.display = 'block';
