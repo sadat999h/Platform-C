@@ -3,133 +3,111 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Platform C - Video Streaming</title>
+    <title>Platform C - Video Player Pro</title>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
-            background: #1a1a1a;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0a0a0a;
             color: white;
             min-height: 100vh;
         }
         .header {
-            background: #2a2a2a;
-            border-bottom: 2px solid #667eea;
-            padding: 20px 0;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            padding: 20px;
+            box-shadow: 0 2px 20px rgba(0,0,0,0.5);
         }
         .header-content {
-            max-width: 1200px;
+            max-width: 1400px;
             margin: 0 auto;
-            padding: 0 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
         }
-        h1 {
-            margin-bottom: 5px;
-            font-size: 32px;
+        .logo {
+            font-size: 28px;
+            font-weight: 700;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
-            background-clip: text;
         }
-        .subtitle {
-            color: #999;
-            font-size: 14px;
+        .status {
+            background: rgba(76, 175, 80, 0.2);
+            color: #4caf50;
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
         }
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 40px 20px;
-        }
+        .container { max-width: 1400px; margin: 0 auto; padding: 40px 20px; }
         .input-section {
-            background: #2a2a2a;
-            padding: 30px;
-            border-radius: 12px;
-            margin-bottom: 30px;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            padding: 40px;
+            border-radius: 20px;
+            margin-bottom: 40px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
         }
-        .form-group {
+        .input-title {
+            font-size: 24px;
+            font-weight: 700;
+            margin-bottom: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        input[type="url"] {
+            width: 100%;
+            padding: 16px 20px;
+            background: rgba(255,255,255,0.05);
+            border: 2px solid rgba(255,255,255,0.1);
+            border-radius: 12px;
+            color: white;
+            font-size: 15px;
             margin-bottom: 20px;
         }
-        label {
-            display: block;
-            margin-bottom: 8px;
-            color: #ddd;
-            font-weight: 500;
-        }
-        input {
-            width: 100%;
-            padding: 14px 16px;
-            background: #1a1a1a;
-            border: 2px solid #444;
-            border-radius: 8px;
-            color: white;
-            font-size: 14px;
-            transition: border-color 0.3s;
-        }
-        input:focus {
-            outline: none;
-            border-color: #667eea;
-        }
-        input::placeholder {
-            color: #666;
-        }
-        button {
-            padding: 14px 32px;
+        input:focus { outline: none; border-color: #667eea; }
+        input::placeholder { color: rgba(255,255,255,0.4); }
+        .btn {
+            padding: 16px 40px;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
             border: none;
-            border-radius: 8px;
+            border-radius: 12px;
             font-size: 16px;
             font-weight: 600;
             cursor: pointer;
-            transition: transform 0.2s, box-shadow 0.2s;
+            transition: transform 0.2s;
         }
-        button:hover:not(:disabled) {
-            transform: translateY(-2px);
-            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.4);
-        }
-        button:disabled {
-            opacity: 0.6;
-            cursor: not-allowed;
-            transform: none;
-        }
+        .btn:hover:not(:disabled) { transform: translateY(-2px); }
+        .btn:disabled { opacity: 0.6; cursor: not-allowed; }
         .video-section {
-            background: #2a2a2a;
-            padding: 30px;
-            border-radius: 12px;
             display: none;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            padding: 30px;
+            border-radius: 20px;
         }
-        .video-section.active {
-            display: block;
-        }
-        .video-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 20px;
-        }
-        .video-title {
-            font-size: 20px;
-            font-weight: 600;
-        }
+        .video-section.active { display: block; }
+        .video-header { display: flex; justify-content: space-between; margin-bottom: 25px; }
+        .video-title { font-size: 22px; font-weight: 700; }
         .close-btn {
-            padding: 8px 16px;
-            font-size: 14px;
-            background: #444;
+            padding: 10px 20px;
+            background: rgba(255,59,48,0.2);
+            border: 1px solid rgba(255,59,48,0.3);
+            color: #ff3b30;
+            border-radius: 10px;
+            cursor: pointer;
+            font-weight: 600;
+            border: none;
         }
-        .video-container {
+        .player-wrapper {
             position: relative;
             padding-bottom: 56.25%;
             height: 0;
-            overflow: hidden;
             background: #000;
-            border-radius: 8px;
-            margin-bottom: 20px;
+            border-radius: 16px;
+            overflow: hidden;
         }
-        .video-container iframe,
-        .video-container video {
+        video, iframe {
             position: absolute;
             top: 0;
             left: 0;
@@ -137,258 +115,200 @@
             height: 100%;
             border: none;
         }
-        .video-info {
-            background: #1a1a1a;
-            padding: 16px;
-            border-radius: 8px;
-            font-size: 14px;
-            color: #999;
-        }
-        .video-info-item {
-            margin-bottom: 8px;
-        }
-        .video-info-item:last-child {
-            margin-bottom: 0;
-        }
-        .video-info-label {
-            color: #667eea;
-            font-weight: 600;
-        }
         .error {
-            background: #ff4444;
+            background: rgba(244, 67, 54, 0.2);
             padding: 16px;
-            border-radius: 8px;
+            border-radius: 12px;
             margin-top: 20px;
-            font-size: 14px;
+            color: #f44336;
+            border: 1px solid rgba(244, 67, 54, 0.3);
         }
-        .loading {
-            text-align: center;
-            padding: 40px;
-            color: #999;
-        }
+        .loading { text-align: center; padding: 60px; color: rgba(255,255,255,0.6); }
         .spinner {
-            border: 3px solid #333;
+            border: 3px solid rgba(255,255,255,0.1);
             border-top: 3px solid #667eea;
             border-radius: 50%;
-            width: 40px;
-            height: 40px;
+            width: 50px;
+            height: 50px;
             animation: spin 1s linear infinite;
             margin: 0 auto 20px;
         }
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-        .info-box {
-            background: #1a3a52;
-            padding: 16px;
+        @keyframes spin { 100% { transform: rotate(360deg); } }
+        .security-badge {
+            background: rgba(76, 175, 80, 0.2);
+            color: #4caf50;
+            padding: 8px 16px;
             border-radius: 8px;
-            margin-bottom: 20px;
-            border-left: 4px solid #4a9eff;
-        }
-        .info-box-title {
-            color: #4a9eff;
-            font-weight: 600;
-            margin-bottom: 8px;
-        }
-        .info-box-text {
-            color: #99c5e8;
-            font-size: 14px;
-        }
-        .status-badge {
-            display: inline-block;
-            padding: 4px 12px;
-            border-radius: 12px;
             font-size: 12px;
-            font-weight: 600;
-            background: #4caf50;
-            color: white;
+            margin-top: 15px;
+            border: 1px solid rgba(76, 175, 80, 0.3);
         }
     </style>
 </head>
 <body>
     <div class="header">
         <div class="header-content">
-            <h1>Platform C</h1>
-            <p class="subtitle">Secure Video Streaming Player <span class="status-badge">🔒 Protected</span></p>
+            <div class="logo">🎬 Video Player Pro</div>
+            <div class="status">🔒 Fully Protected</div>
         </div>
     </div>
 
     <div class="container">
         <div class="input-section">
-            <div class="info-box">
-                <div class="info-box-title">🛡️ Security Active</div>
-                <div class="info-box-text">
-                    This platform uses a security string to fetch videos securely. 
-                    The original video URLs from Platform A remain completely hidden.
-                </div>
-            </div>
-            
-            <div class="form-group">
-                <label for="videoUrl">Enter Platform B Video URL</label>
-                <input 
-                    type="url" 
-                    id="videoUrl" 
-                    placeholder="https://your-platform-b.vercel.app/video/xxxxx"
-                    onkeypress="handleEnter(event)"
-                >
-            </div>
-            <button onclick="loadVideo()" id="loadBtn">🎬 Load & Stream Video</button>
+            <div class="input-title">Load Your Secure Video</div>
+            <input 
+                type="url" 
+                id="videoUrl" 
+                placeholder="Paste your encrypted video URL... (e.g., https://platform-b.vercel.app/video/abc123)"
+            >
+            <button class="btn" id="loadBtn">▶️ Load Video</button>
+            <div class="security-badge">🛡️ Original URLs never exposed</div>
             <div id="error" class="error" style="display: none;"></div>
         </div>
 
         <div id="loadingSection" class="loading" style="display: none;">
             <div class="spinner"></div>
-            <p>Fetching secure video...</p>
+            <p>Loading secure stream...</p>
         </div>
 
         <div id="videoSection" class="video-section">
             <div class="video-header">
                 <div class="video-title">Now Playing</div>
-                <button class="close-btn" onclick="closeVideo()">Close</button>
+                <button class="close-btn" id="closeBtn">✕ Close</button>
             </div>
-            <div class="video-container">
-                <iframe id="videoPlayer" allowfullscreen allow="autoplay"></iframe>
-            </div>
-            <div class="video-info">
-                <div class="video-info-item">
-                    <span class="video-info-label">Video ID:</span>
-                    <span id="videoId">-</span>
-                </div>
-                <div class="video-info-item">
-                    <span class="video-info-label">Status:</span>
-                    <span style="color: #4caf50;">✓ Securely Loaded</span>
-                </div>
-                <div class="video-info-item">
-                    <span class="video-info-label">Security:</span>
-                    <span>Original URL hidden from client</span>
-                </div>
+            <div class="player-wrapper">
+                <video id="videoPlayer" controls playsinline preload="auto"></video>
+                <iframe id="iframePlayer" allowfullscreen allow="autoplay"></iframe>
             </div>
         </div>
     </div>
 
     <script>
-        // Security string will be injected from environment
-        const SECURITY_STRING = '__SECURITY_STRING__';
-        let currentVideoUrl = '';
-        let currentVideoId = '';
+        // IMPORTANT: Replace this with your Platform B's MASTER_SECURITY_STRING
+        const SEC = '84418779257393762955868022673598';
+        let vid = null;
+        let ifr = null;
+
+        // Function to normalize URL (remove double slashes)
+        function normalizeUrl(url) {
+            // Replace multiple slashes with single slash (except after protocol)
+            return url.replace(/([^:]\/)\/+/g, '$1');
+        }
 
         async function loadVideo() {
-            const videoUrlInput = document.getElementById('videoUrl').value.trim();
-            const errorEl = document.getElementById('error');
-            const loadingSection = document.getElementById('loadingSection');
-            const videoSection = document.getElementById('videoSection');
-            const videoPlayer = document.getElementById('videoPlayer');
-            const loadBtn = document.getElementById('loadBtn');
+            const url = document.getElementById('videoUrl').value.trim();
+            const err = document.getElementById('error');
+            const load = document.getElementById('loadingSection');
+            const sec = document.getElementById('videoSection');
+            vid = document.getElementById('videoPlayer');
+            ifr = document.getElementById('iframePlayer');
+            const btn = document.getElementById('loadBtn');
 
-            if (!videoUrlInput) {
-                showError('Please enter a video URL');
+            if (!url || !url.includes('/video/')) {
+                err.textContent = '❌ Invalid URL - Must contain /video/';
+                err.style.display = 'block';
                 return;
             }
 
-            // Validate URL format
-            if (!isValidUrl(videoUrlInput)) {
-                showError('Invalid URL format');
-                return;
-            }
-
-            // Extract video ID from Platform B URL
-            const urlParts = videoUrlInput.split('/');
-            const videoId = urlParts[urlParts.length - 1];
-
-            if (!videoId) {
-                showError('Invalid video URL format');
-                return;
-            }
-
-            // Hide error and show loading
-            errorEl.style.display = 'none';
-            videoSection.classList.remove('active');
-            loadingSection.style.display = 'block';
-            loadBtn.disabled = true;
+            err.style.display = 'none';
+            sec.classList.remove('active');
+            load.style.display = 'block';
+            btn.disabled = true;
 
             try {
-                // Extract base URL from the provided URL
-                const baseUrl = videoUrlInput.substring(0, videoUrlInput.lastIndexOf('/video/'));
-                const apiUrl = `${baseUrl}/api/video/${videoId}`;
-
-                const response = await fetch(apiUrl, {
-                    headers: {
-                        'X-Security-String': SECURITY_STRING
+                // Extract video ID and base URL properly
+                const videoMatch = url.match(/\/video\/([^/?#]+)/);
+                if (!videoMatch) {
+                    throw new Error('Could not extract video ID from URL');
+                }
+                
+                const videoId = videoMatch[1];
+                
+                // Extract base URL (everything before /video/)
+                const baseUrl = url.substring(0, url.indexOf('/video/'));
+                
+                // Construct API URL properly (normalize to prevent double slashes)
+                const apiUrl = normalizeUrl(baseUrl + '/api/video/' + videoId);
+                
+                console.log('Fetching from:', apiUrl);
+                console.log('Video ID:', videoId);
+                
+                const res = await fetch(apiUrl, {
+                    method: 'GET',
+                    headers: { 
+                        'X-Security-String': SEC,
+                        'Content-Type': 'application/json'
                     }
                 });
-
-                const data = await response.json();
-
-                if (data.success && data.originalUrl) {
-                    currentVideoUrl = data.originalUrl;
-                    currentVideoId = data.videoId || videoId;
-                    
-                    // Set the video source
-                    videoPlayer.src = currentVideoUrl;
-                    document.getElementById('videoId').textContent = currentVideoId;
-                    
-                    // Show video section
-                    loadingSection.style.display = 'none';
-                    videoSection.classList.add('active');
-                    
-                    // Scroll to video
-                    videoSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                } else {
+                
+                if (!res.ok) {
+                    const errorText = await res.text();
+                    throw new Error('Failed to fetch video (Status: ' + res.status + ')');
+                }
+                
+                const data = await res.json();
+                if (!data.success) {
                     throw new Error(data.message || 'Failed to load video');
                 }
-            } catch (error) {
-                loadingSection.style.display = 'none';
-                showError('Error loading video: ' + error.message);
-            } finally {
-                loadBtn.disabled = false;
+
+                // Normalize proxy URL and add security key
+                const proxyUrl = normalizeUrl(data.proxyUrl) + '?key=' + encodeURIComponent(SEC);
+                
+                console.log('Proxy URL:', proxyUrl);
+                console.log('Video type:', data.type);
+                
+                if (data.type === 'embed') {
+                    ifr.src = proxyUrl;
+                    ifr.style.display = 'block';
+                    vid.style.display = 'none';
+                } else {
+                    vid.style.display = 'block';
+                    ifr.style.display = 'none';
+                    vid.src = proxyUrl;
+                }
+
+                load.style.display = 'none';
+                sec.classList.add('active');
+                btn.disabled = false;
+            } catch (e) {
+                console.error('Load error:', e);
+                load.style.display = 'none';
+                err.textContent = '❌ ' + e.message;
+                err.style.display = 'block';
+                btn.disabled = false;
             }
         }
 
         function closeVideo() {
-            const videoSection = document.getElementById('videoSection');
-            const videoPlayer = document.getElementById('videoPlayer');
-            
-            videoSection.classList.remove('active');
-            videoPlayer.src = '';
-            currentVideoUrl = '';
-            currentVideoId = '';
-            
-            // Scroll back to top
-            window.scrollTo({ top: 0, behavior: 'smooth' });
-        }
-
-        function isValidUrl(string) {
-            try {
-                new URL(string);
-                return true;
-            } catch (_) {
-                return false;
+            document.getElementById('videoSection').classList.remove('active');
+            if (vid) {
+                vid.pause();
+                vid.src = '';
             }
+            if (ifr) ifr.src = '';
         }
 
-        function showError(message) {
-            const errorEl = document.getElementById('error');
-            errorEl.textContent = '❌ ' + message;
-            errorEl.style.display = 'block';
-            
-            // Auto-hide error after 5 seconds
-            setTimeout(() => {
-                errorEl.style.display = 'none';
-            }, 5000);
-        }
-
-        function handleEnter(event) {
-            if (event.key === 'Enter') {
+        // Event listeners
+        document.getElementById('loadBtn').addEventListener('click', loadVideo);
+        document.getElementById('closeBtn').addEventListener('click', closeVideo);
+        
+        // Handle Enter key
+        document.getElementById('videoUrl').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
                 loadVideo();
             }
-        }
+        });
 
-        // Check if security string is configured
-        if (SECURITY_STRING === '__SECURITY_STRING__') {
-            console.warn('Security string not configured. Please set SECURITY_STRING environment variable.');
-            showError('Security configuration missing. Please contact administrator.');
-        }
+        // Auto-hide errors after 5 seconds
+        const errorEl = document.getElementById('error');
+        const observer = new MutationObserver(function() {
+            if (errorEl.style.display === 'block') {
+                setTimeout(() => {
+                    errorEl.style.display = 'none';
+                }, 5000);
+            }
+        });
+        observer.observe(errorEl, { attributes: true, attributeFilter: ['style'] });
     </script>
 </body>
 </html>
