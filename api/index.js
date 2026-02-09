@@ -2,7 +2,7 @@
 // This is the serverless function version for Platform C
 
 // IMPORTANT: This MUST match Platform B's MASTER_SECURITY_STRING
-const MASTER_SECURITY_STRING = '06942188162472527188672293629719';
+const MASTER_SECURITY_STRING = '84418779257393762955868022673598';
 
 export default function handler(req, res) {
   // Set CORS headers for the API route
