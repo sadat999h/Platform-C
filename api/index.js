@@ -262,7 +262,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     // Verify security string is configured
-    if (SEC === '84418779257393762955868022673598') {
+    if (SEC === '06942188162472527188672293629719') {
         console.warn('⚠️ Using default security string. Please update SEC variable with your Platform B key.');
     } else {
         console.log('✅ Security string configured');
@@ -292,7 +292,7 @@ function testPlatformC() {
         'loadVideo function defined': typeof loadVideo === 'function',
         'closeVideo function defined': typeof closeVideo === 'function',
         'normalizeUrl function defined': typeof normalizeUrl === 'function',
-        'Security string configured': SEC !== '84418779257393762955868022673598'
+        'Security string configured': SEC !== '06942188162472527188672293629719'
     };
     
     console.table(checks);
