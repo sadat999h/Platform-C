@@ -1,21 +1,21 @@
-// api/index.js - Platform C Player - COMPLETE FINAL VERSION
+// api/index.js - Platform C Player
 // This is the serverless function version for Platform C
 
 // IMPORTANT: This MUST match Platform B's MASTER_SECURITY_STRING
 const MASTER_SECURITY_STRING = '84418779257393762955868022673598';
 
 export default function handler(req, res) {
-  // Set CORS headers for the API route
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-  
+
   const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Platform C - Video Player Pro</title>
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest/dist/hls.min.js"><\/script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -111,9 +111,9 @@ export default function handler(req, res) {
             border-radius: 20px;
         }
         .video-section.active { display: block; }
-        .video-header { 
-            display: flex; 
-            justify-content: space-between; 
+        .video-header {
+            display: flex;
+            justify-content: space-between;
             margin-bottom: 25px;
             flex-wrap: wrap;
             gap: 10px;
@@ -140,10 +140,8 @@ export default function handler(req, res) {
         }
         video, iframe {
             position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
             border: none;
         }
         .error {
@@ -164,9 +162,9 @@ export default function handler(req, res) {
             font-size: 13px;
             display: inline-block;
         }
-        .loading { 
-            text-align: center; 
-            padding: 60px; 
+        .loading {
+            text-align: center;
+            padding: 60px;
             color: rgba(255,255,255,0.6);
             display: none;
         }
@@ -174,8 +172,7 @@ export default function handler(req, res) {
             border: 3px solid rgba(255,255,255,0.1);
             border-top: 3px solid #667eea;
             border-radius: 50%;
-            width: 50px;
-            height: 50px;
+            width: 50px; height: 50px;
             animation: spin 1s linear infinite;
             margin: 0 auto 20px;
         }
@@ -188,6 +185,30 @@ export default function handler(req, res) {
             font-size: 12px;
             margin-top: 15px;
             border: 1px solid rgba(76, 175, 80, 0.3);
+        }
+        /* DRM protections */
+        * {
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+            user-select: none;
+        }
+        input[type="url"] {
+            -webkit-user-select: text;
+            -moz-user-select: text;
+            user-select: text;
+        }
+        video, img, iframe {
+            -webkit-user-drag: none;
+            user-drag: none;
+        }
+        .video-overlay {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            z-index: 10;
+            background: transparent;
+            pointer-events: none;
         }
         @media (max-width: 768px) {
             .input-section { padding: 20px; }
@@ -206,7 +227,7 @@ export default function handler(req, res) {
     <div class="container">
         <div class="input-section">
             <div class="input-title">Load Your Secure Video</div>
-            
+
             <div class="instructions">
                 <strong>📋 How to use:</strong><br>
                 1️⃣ Go to <strong>Platform B</strong> first<br>
@@ -214,12 +235,8 @@ export default function handler(req, res) {
                 3️⃣ Copy the URL (looks like: <code>https://platform-b.../video/abc123</code>)<br>
                 4️⃣ Paste it below and click Load Video
             </div>
-            
-            <input 
-                type="url" 
-                id="videoUrl" 
-                placeholder="Paste Platform B video URL here..."
-            >
+
+            <input type="url" id="videoUrl" placeholder="Paste Platform B video URL here...">
             <button class="btn" id="loadBtn">▶️ Load Video</button>
             <div class="security-badge">🛡️ Original URLs never exposed</div>
             <div id="error" class="error" style="display: none;"></div>
@@ -236,43 +253,42 @@ export default function handler(req, res) {
                 <button class="close-btn" id="closeBtn">✕ Close</button>
             </div>
             <div class="player-wrapper">
-                <video id="videoPlayer" controls playsinline preload="auto"></video>
-                <iframe id="iframePlayer" allowfullscreen allow="autoplay"></iframe>
+                <video id="videoPlayer" controls playsinline preload="auto"
+                       controlsList="nodownload nofullscreen noremoteplayback"
+                       disablePictureInPicture
+                       oncontextmenu="return false;"></video>
+                <iframe id="iframePlayer" allowfullscreen allow="autoplay"
+                        oncontextmenu="return false;"></iframe>
+                <div class="video-overlay" oncontextmenu="return false;"></div>
             </div>
         </div>
     </div>
 
     <script>
-        // ⚠️ CRITICAL: This MUST match Platform B's MASTER_SECURITY_STRING
         const SEC = '${MASTER_SECURITY_STRING}';
-        
         let vid = null;
         let ifr = null;
 
-        // Normalize URL - remove double slashes
         function normalizeUrl(url) {
-            return url.replace(/([^:]\/)\/+/g, '$1');
+            return url.replace(/([^:]\/\/+)/g, m => m[0] + m.slice(1).replace(/\\/+/g, '/'));
         }
 
-        // Detect raw video URLs
         function isRawVideoUrl(url) {
             const rawDomains = ['dropbox.com', 'drive.google.com', 'youtube.com', 'youtu.be', 'vimeo.com', 'dailymotion.com'];
             try {
                 const urlObj = new URL(url);
                 return rawDomains.some(domain => urlObj.hostname.includes(domain));
-            } catch {
-                return false;
-            }
+            } catch { return false; }
         }
 
         async function loadVideo() {
-            const url = document.getElementById('videoUrl').value.trim();
-            const err = document.getElementById('error');
+            const url  = document.getElementById('videoUrl').value.trim();
+            const err  = document.getElementById('error');
             const load = document.getElementById('loadingSection');
-            const sec = document.getElementById('videoSection');
+            const sec  = document.getElementById('videoSection');
             vid = document.getElementById('videoPlayer');
             ifr = document.getElementById('iframePlayer');
-            const btn = document.getElementById('loadBtn');
+            const btn  = document.getElementById('loadBtn');
 
             if (!url) {
                 err.innerHTML = '❌ <strong>Please enter a video URL</strong>';
@@ -280,30 +296,17 @@ export default function handler(req, res) {
                 return;
             }
 
-            // Check if user pasted raw video URL
             if (isRawVideoUrl(url)) {
-                err.innerHTML = \`
-                    ❌ <strong>Wrong URL Type!</strong><br><br>
-                    You pasted a <strong>direct video URL</strong> (Dropbox, YouTube, etc.)<br><br>
-                    <strong>Correct Process:</strong><br>
-                    1️⃣ Go to <strong>Platform B</strong><br>
-                    2️⃣ Paste your video URL there<br>
-                    3️⃣ Click "Generate URL"<br>
-                    4️⃣ Copy the generated Platform B URL<br>
-                    5️⃣ Come back here and paste it<br><br>
-                    <strong>Platform B URL example:</strong><br>
-                    <code>https://platform-b.vercel.app/video/abc123def456...</code>
-                \`;
+                err.innerHTML = \`❌ <strong>Wrong URL Type!</strong><br><br>
+                    You pasted a direct video URL. Please go to <strong>Platform B</strong> first,
+                    generate a URL there, then paste that URL here.\`;
                 err.style.display = 'block';
                 return;
             }
 
             if (!url.includes('/video/')) {
-                err.innerHTML = \`
-                    ❌ <strong>Invalid URL Format</strong><br><br>
-                    The URL must be from Platform B and contain <code>/video/</code><br><br>
-                    <strong>Example:</strong> <code>https://platform-b.vercel.app/video/abc123</code>
-                \`;
+                err.innerHTML = \`❌ <strong>Invalid URL Format</strong><br><br>
+                    The URL must be from Platform B and contain <code>/video/</code>\`;
                 err.style.display = 'block';
                 return;
             }
@@ -315,71 +318,72 @@ export default function handler(req, res) {
 
             try {
                 const videoMatch = url.match(/\\/video\\/([^/?#]+)/);
-                if (!videoMatch) {
-                    throw new Error('Could not extract video ID from URL');
-                }
-                
+                if (!videoMatch) throw new Error('Could not extract video ID from URL');
+
                 const videoId = videoMatch[1];
                 const baseUrl = url.substring(0, url.indexOf('/video/'));
-                const apiUrl = normalizeUrl(baseUrl + '/api/video/' + videoId);
-                
-                console.log('🎬 Fetching:', apiUrl);
-                console.log('🆔 Video ID:', videoId);
-                
+                const apiUrl  = normalizeUrl(baseUrl + '/api/video/' + videoId);
+
                 const res = await fetch(apiUrl, {
                     method: 'GET',
-                    headers: { 
+                    headers: {
                         'X-Security-String': SEC,
                         'Content-Type': 'application/json',
                         'Accept': 'application/json',
                         'Origin': window.location.origin
                     }
                 });
-                
-                console.log('📡 Response status:', res.status);
-                
+
                 if (!res.ok) {
-                    if (res.status === 403) {
-                        throw new Error('Security key mismatch - Check your configuration');
-                    } else if (res.status === 404) {
-                        throw new Error('Video not found - The video ID may be incorrect');
-                    } else if (res.status === 500) {
-                        throw new Error('Server error - Check Platform B logs');
-                    }
+                    if (res.status === 403) throw new Error('Security key mismatch - Check your configuration');
+                    if (res.status === 404) throw new Error('Video not found - The video ID may be incorrect');
+                    if (res.status === 500) throw new Error('Server error - Check Platform B logs');
                     throw new Error('Failed to fetch video (Status: ' + res.status + ')');
                 }
-                
-                const data = await res.json();
-                console.log('📦 Response data:', data);
-                
-                if (!data.success) {
-                    throw new Error(data.message || 'Failed to load video');
-                }
 
-                const proxyUrl = normalizeUrl(data.proxyUrl) + '?key=' + encodeURIComponent(SEC);
-                
-                console.log('🔗 Proxy URL:', proxyUrl);
-                console.log('📺 Type:', data.type);
-                console.log('🎯 Platform:', data.platform);
-                
+                const data = await res.json();
+                if (!data.success) throw new Error(data.message || 'Failed to load video');
+
+                const proxyUrl = normalizeUrl(data.proxyUrl);
+
                 if (data.type === 'embed') {
-                    ifr.src = proxyUrl;
+                    ifr.src = proxyUrl + '?key=' + encodeURIComponent(SEC);
                     ifr.style.display = 'block';
                     vid.style.display = 'none';
                 } else {
                     vid.style.display = 'block';
                     ifr.style.display = 'none';
-                    vid.src = proxyUrl;
+
+                    const streamToken = data.streamToken;
+
+                    if (window._hlsInstance) {
+                        window._hlsInstance.destroy();
+                        window._hlsInstance = null;
+                    }
+
+                    if (typeof Hls !== 'undefined' && Hls.isSupported()) {
+                        const hls = new Hls({
+                            xhrSetup: function (xhr) {
+                                xhr.setRequestHeader('x-stream-token', streamToken);
+                            },
+                            enableWorker: true,
+                            lowLatencyMode: false
+                        });
+                        hls.loadSource(proxyUrl);
+                        hls.attachMedia(vid);
+                        window._hlsInstance = hls;
+                    } else if (vid.canPlayType('application/vnd.apple.mpegurl')) {
+                        vid.src = proxyUrl + '?token=' + encodeURIComponent(streamToken);
+                    } else {
+                        vid.src = proxyUrl + '?token=' + encodeURIComponent(streamToken);
+                    }
                 }
 
                 load.style.display = 'none';
                 sec.classList.add('active');
                 btn.disabled = false;
-                
-                console.log('✅ Video loaded successfully!');
-                
+
             } catch (e) {
-                console.error('❌ Error:', e);
                 load.style.display = 'none';
                 err.innerHTML = '❌ <strong>Error:</strong> ' + e.message;
                 err.style.display = 'block';
@@ -388,41 +392,92 @@ export default function handler(req, res) {
         }
 
         function closeVideo() {
-            console.log('🛑 Closing video');
             document.getElementById('videoSection').classList.remove('active');
-            if (vid) {
-                vid.pause();
-                vid.src = '';
+            if (window._hlsInstance) {
+                window._hlsInstance.destroy();
+                window._hlsInstance = null;
             }
-            if (ifr) ifr.src = '';
+            if (vid) { vid.pause(); vid.src = ''; }
+            if (ifr) { ifr.src = ''; }
         }
 
-        // Event listeners
-        document.addEventListener('DOMContentLoaded', function() {
-            console.log('🚀 Platform C Video Player initialized');
-            console.log('🔑 Security string configured:', SEC);
-            
+        document.addEventListener('DOMContentLoaded', function () {
             document.getElementById('loadBtn').addEventListener('click', loadVideo);
             document.getElementById('closeBtn').addEventListener('click', closeVideo);
-            
-            document.getElementById('videoUrl').addEventListener('keypress', function(e) {
-                if (e.key === 'Enter') {
-                    loadVideo();
-                }
+            document.getElementById('videoUrl').addEventListener('keypress', function (e) {
+                if (e.key === 'Enter') loadVideo();
             });
 
-            // Auto-hide errors after 10 seconds
             const errorEl = document.getElementById('error');
-            const observer = new MutationObserver(function() {
+            const observer = new MutationObserver(function () {
                 if (errorEl.style.display === 'block') {
-                    setTimeout(() => {
-                        errorEl.style.display = 'none';
-                    }, 10000);
+                    setTimeout(() => { errorEl.style.display = 'none'; }, 10000);
                 }
             });
             observer.observe(errorEl, { attributes: true, attributeFilter: ['style'] });
         });
-    </script>
+
+        // ── DRM Protections ──
+
+        document.addEventListener('contextmenu', function (e) {
+            e.preventDefault(); return false;
+        });
+
+        document.addEventListener('keydown', function (e) {
+            const key = e.key.toLowerCase();
+            const blockedWithCtrl = ['s', 'u', 'p', 'i', 'j', 'c'];
+            if ((e.ctrlKey || e.metaKey) && blockedWithCtrl.includes(key)) {
+                e.preventDefault(); return false;
+            }
+            if ((e.ctrlKey || e.metaKey) && e.shiftKey && ['i','j','c'].includes(key)) {
+                e.preventDefault(); return false;
+            }
+            if (e.key === 'F12' || e.key === 'PrintScreen') {
+                e.preventDefault(); return false;
+            }
+        });
+
+        document.addEventListener('dragstart', function (e) {
+            e.preventDefault(); return false;
+        });
+
+        (function detectDevTools() {
+            const threshold = 160;
+            function check() {
+                const wDiff = window.outerWidth  - window.innerWidth;
+                const hDiff = window.outerHeight - window.innerHeight;
+                const v = document.getElementById('videoPlayer');
+                const f = document.getElementById('iframePlayer');
+                if (wDiff > threshold || hDiff > threshold) {
+                    if (v && !v.paused) v.pause();
+                    if (v) v.style.visibility = 'hidden';
+                    if (f) f.style.visibility = 'hidden';
+                } else {
+                    if (v) v.style.visibility = 'visible';
+                    if (f) f.style.visibility = 'visible';
+                }
+            }
+            setInterval(check, 1000);
+        })();
+
+        if (window.MediaRecorder) window.MediaRecorder = undefined;
+
+        if (navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia) {
+            navigator.mediaDevices.getDisplayMedia = function () {
+                return Promise.reject(new DOMException('Screen capture is disabled.', 'NotAllowedError'));
+            };
+        }
+
+        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+            const _orig = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
+            navigator.mediaDevices.getUserMedia = function (constraints) {
+                if (constraints && constraints.video) {
+                    return Promise.reject(new DOMException('Video capture is disabled.', 'NotAllowedError'));
+                }
+                return _orig(constraints);
+            };
+        }
+    <\/script>
 </body>
 </html>`;
 
