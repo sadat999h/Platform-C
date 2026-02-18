@@ -143,6 +143,42 @@
             margin-top: 15px;
             border: 1px solid rgba(76, 175, 80, 0.3);
         }
+
+        /* ── DRM / Anti-Download Protections ── */
+
+        /* Prevent text/element selection across the whole page */
+        * {
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+            user-select: none;
+        }
+
+        /* Allow selection only inside the URL input */
+        input[type="url"] {
+            -webkit-user-select: text;
+            -moz-user-select: text;
+            user-select: text;
+        }
+
+        /* Prevent dragging images / video element */
+        video, img, iframe {
+            -webkit-user-drag: none;
+            user-drag: none;
+            pointer-events: auto; /* keep controls working */
+        }
+
+        /* Transparent overlay sits on top of the video to block
+           right-click → "Save video as…" and drag-to-desktop */
+        .video-overlay {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            z-index: 10;
+            background: transparent;
+            /* Let clicks/taps pass through so native controls still work */
+            pointer-events: none;
+        }
     </style>
 </head>
 <body>
@@ -177,8 +213,15 @@
                 <button class="close-btn" id="closeBtn">✕ Close</button>
             </div>
             <div class="player-wrapper">
-                <video id="videoPlayer" controls playsinline preload="auto"></video>
-                <iframe id="iframePlayer" allowfullscreen allow="autoplay"></iframe>
+                <!-- nodownload removes the native browser download button -->
+                <video id="videoPlayer" controls playsinline preload="auto"
+                       controlsList="nodownload nofullscreen noremoteplayback"
+                       disablePictureInPicture
+                       oncontextmenu="return false;"></video>
+                <iframe id="iframePlayer" allowfullscreen allow="autoplay"
+                        oncontextmenu="return false;"></iframe>
+                <!-- Transparent overlay blocks right-click "Save video as…" on the video surface -->
+                <div class="video-overlay" id="videoOverlay" oncontextmenu="return false;"></div>
             </div>
         </div>
     </div>
@@ -309,6 +352,110 @@
             }
         });
         observer.observe(errorEl, { attributes: true, attributeFilter: ['style'] });
+
+        // ─────────────────────────────────────────────
+        //  DRM / Anti-Download / Anti-Record Protections
+        // ─────────────────────────────────────────────
+
+        // 1. Disable right-click on the entire document
+        document.addEventListener('contextmenu', function (e) {
+            e.preventDefault();
+            return false;
+        });
+
+        // 2. Block keyboard shortcuts commonly used to download / inspect / record
+        document.addEventListener('keydown', function (e) {
+            const key = e.key.toLowerCase();
+
+            // Ctrl/Cmd + S  → Save page
+            // Ctrl/Cmd + U  → View source
+            // Ctrl/Cmd + Shift + I/J/C → DevTools
+            // Ctrl/Cmd + Shift + S → Screenshot (some browsers)
+            // F12 → DevTools
+            // Ctrl/Cmd + P  → Print (can capture frames)
+            const blockedKeys = ['s', 'u', 'p', 'i', 'j', 'c'];
+
+            if ((e.ctrlKey || e.metaKey) && blockedKeys.includes(key)) {
+                e.preventDefault();
+                return false;
+            }
+
+            // Ctrl+Shift+I / Ctrl+Shift+J / Ctrl+Shift+C
+            if ((e.ctrlKey || e.metaKey) && e.shiftKey && ['i', 'j', 'c'].includes(key)) {
+                e.preventDefault();
+                return false;
+            }
+
+            // F12
+            if (e.key === 'F12') {
+                e.preventDefault();
+                return false;
+            }
+
+            // PrtScn (PrintScreen) – limited but worth blocking
+            if (e.key === 'PrintScreen') {
+                e.preventDefault();
+                return false;
+            }
+        });
+
+        // 3. Disable drag-start on the video element (prevents drag-to-desktop)
+        document.addEventListener('dragstart', function (e) {
+            e.preventDefault();
+            return false;
+        });
+
+        // 4. Detect DevTools open via window size change heuristic
+        //    and blur / hide the video when likely open
+        (function detectDevTools() {
+            const threshold = 160;
+            function check() {
+                const widthDiff  = window.outerWidth  - window.innerWidth;
+                const heightDiff = window.outerHeight - window.innerHeight;
+                if (widthDiff > threshold || heightDiff > threshold) {
+                    // DevTools likely open – pause and blank the video
+                    const v = document.getElementById('videoPlayer');
+                    if (v && !v.paused) {
+                        v.pause();
+                        v.style.visibility = 'hidden';
+                    }
+                    document.getElementById('iframePlayer').style.visibility = 'hidden';
+                } else {
+                    document.getElementById('videoPlayer').style.visibility  = 'visible';
+                    document.getElementById('iframePlayer').style.visibility = 'visible';
+                }
+            }
+            setInterval(check, 1000);
+        })();
+
+        // 5. Block the MediaRecorder API so extensions can't capture the stream
+        if (window.MediaRecorder) {
+            window.MediaRecorder = undefined;
+        }
+
+        // 6. Intercept getDisplayMedia (screen-capture API used by recording extensions)
+        if (navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia) {
+            navigator.mediaDevices.getDisplayMedia = function () {
+                return Promise.reject(new DOMException(
+                    'Screen capture is disabled on this platform.',
+                    'NotAllowedError'
+                ));
+            };
+        }
+
+        // 7. Override getUserMedia to block screen/video capture attempts
+        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+            const _origGetUserMedia = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
+            navigator.mediaDevices.getUserMedia = function (constraints) {
+                if (constraints && constraints.video) {
+                    return Promise.reject(new DOMException(
+                        'Video capture is disabled on this platform.',
+                        'NotAllowedError'
+                    ));
+                }
+                return _origGetUserMedia(constraints);
+            };
+        }
     </script>
 </body>
 </html>
