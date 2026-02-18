@@ -273,8 +273,6 @@
                 // Construct API URL properly (normalize to prevent double slashes)
                 const apiUrl = normalizeUrl(baseUrl + '/api/video/' + videoId);
                 
-                console.log('Fetching from:', apiUrl);
-                console.log('Video ID:', videoId);
                 
                 const res = await fetch(apiUrl, {
                     method: 'GET',
@@ -297,8 +295,6 @@
                 // Normalize proxy URL and add security key
                 const proxyUrl = normalizeUrl(data.proxyUrl) + '?key=' + encodeURIComponent(SEC);
                 
-                console.log('Proxy URL:', proxyUrl);
-                console.log('Video type:', data.type);
                 
                 if (data.type === 'embed') {
                     ifr.src = proxyUrl;
