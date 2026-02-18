@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Platform C - Video Player Pro</title>
+    <!-- HLS.js for chunked streaming (breaks IDM interception) -->
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest/dist/hls.min.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -92,7 +94,6 @@
         .close-btn {
             padding: 10px 20px;
             background: rgba(255,59,48,0.2);
-            border: 1px solid rgba(255,59,48,0.3);
             color: #ff3b30;
             border-radius: 10px;
             cursor: pointer;
@@ -109,10 +110,8 @@
         }
         video, iframe {
             position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
             border: none;
         }
         .error {
@@ -128,8 +127,7 @@
             border: 3px solid rgba(255,255,255,0.1);
             border-top: 3px solid #667eea;
             border-radius: 50%;
-            width: 50px;
-            height: 50px;
+            width: 50px; height: 50px;
             animation: spin 1s linear infinite;
             margin: 0 auto 20px;
         }
@@ -145,39 +143,29 @@
         }
 
         /* ── DRM / Anti-Download Protections ── */
-
-        /* Prevent text/element selection across the whole page */
         * {
             -webkit-user-select: none;
             -moz-user-select: none;
             -ms-user-select: none;
             user-select: none;
         }
-
-        /* Allow selection only inside the URL input */
         input[type="url"] {
             -webkit-user-select: text;
             -moz-user-select: text;
             user-select: text;
         }
-
-        /* Prevent dragging images / video element */
         video, img, iframe {
             -webkit-user-drag: none;
             user-drag: none;
-            pointer-events: auto; /* keep controls working */
         }
-
-        /* Transparent overlay sits on top of the video to block
-           right-click → "Save video as…" and drag-to-desktop */
+        /* Transparent overlay blocks right-click → "Save video as…" on the raw video surface */
         .video-overlay {
             position: absolute;
             top: 0; left: 0;
             width: 100%; height: 100%;
             z-index: 10;
             background: transparent;
-            /* Let clicks/taps pass through so native controls still work */
-            pointer-events: none;
+            pointer-events: none; /* pass clicks through to native controls */
         }
     </style>
 </head>
@@ -192,9 +180,9 @@
     <div class="container">
         <div class="input-section">
             <div class="input-title">Load Your Secure Video</div>
-            <input 
-                type="url" 
-                id="videoUrl" 
+            <input
+                type="url"
+                id="videoUrl"
                 placeholder="Paste your encrypted video URL... (e.g., https://platform-b.vercel.app/video/abc123)"
             >
             <button class="btn" id="loadBtn">▶️ Load Video</button>
@@ -213,39 +201,36 @@
                 <button class="close-btn" id="closeBtn">✕ Close</button>
             </div>
             <div class="player-wrapper">
-                <!-- nodownload removes the native browser download button -->
                 <video id="videoPlayer" controls playsinline preload="auto"
                        controlsList="nodownload nofullscreen noremoteplayback"
                        disablePictureInPicture
                        oncontextmenu="return false;"></video>
                 <iframe id="iframePlayer" allowfullscreen allow="autoplay"
                         oncontextmenu="return false;"></iframe>
-                <!-- Transparent overlay blocks right-click "Save video as…" on the video surface -->
-                <div class="video-overlay" id="videoOverlay" oncontextmenu="return false;"></div>
+                <div class="video-overlay" oncontextmenu="return false;"></div>
             </div>
         </div>
     </div>
 
     <script>
-        // IMPORTANT: Replace this with your Platform B's MASTER_SECURITY_STRING
+        // Must match Platform B's MASTER_SECURITY_STRING
         const SEC = '84418779257393762955868022673598';
+
         let vid = null;
         let ifr = null;
 
-        // Function to normalize URL (remove double slashes)
         function normalizeUrl(url) {
-            // Replace multiple slashes with single slash (except after protocol)
-            return url.replace(/([^:]\/)\/+/g, '$1');
+            return url.replace(/([^:]\/\/+)/g, m => m[0] + m.slice(1).replace(/\/+/g, '/'));
         }
 
         async function loadVideo() {
             const url = document.getElementById('videoUrl').value.trim();
-            const err = document.getElementById('error');
+            const err  = document.getElementById('error');
             const load = document.getElementById('loadingSection');
-            const sec = document.getElementById('videoSection');
+            const sec  = document.getElementById('videoSection');
             vid = document.getElementById('videoPlayer');
             ifr = document.getElementById('iframePlayer');
-            const btn = document.getElementById('loadBtn');
+            const btn  = document.getElementById('loadBtn');
 
             if (!url || !url.includes('/video/')) {
                 err.textContent = '❌ Invalid URL - Must contain /video/';
@@ -259,58 +244,76 @@
             btn.disabled = true;
 
             try {
-                // Extract video ID and base URL properly
                 const videoMatch = url.match(/\/video\/([^/?#]+)/);
-                if (!videoMatch) {
-                    throw new Error('Could not extract video ID from URL');
-                }
-                
+                if (!videoMatch) throw new Error('Could not extract video ID from URL');
+
                 const videoId = videoMatch[1];
-                
-                // Extract base URL (everything before /video/)
                 const baseUrl = url.substring(0, url.indexOf('/video/'));
-                
-                // Construct API URL properly (normalize to prevent double slashes)
-                const apiUrl = normalizeUrl(baseUrl + '/api/video/' + videoId);
-                
-                
+                const apiUrl  = normalizeUrl(baseUrl + '/api/video/' + videoId);
+
                 const res = await fetch(apiUrl, {
                     method: 'GET',
-                    headers: { 
+                    headers: {
                         'X-Security-String': SEC,
                         'Content-Type': 'application/json'
                     }
                 });
-                
+
                 if (!res.ok) {
-                    const errorText = await res.text();
                     throw new Error('Failed to fetch video (Status: ' + res.status + ')');
                 }
-                
+
                 const data = await res.json();
                 if (!data.success) {
                     throw new Error(data.message || 'Failed to load video');
                 }
 
-                // Normalize proxy URL and add security key
-                const proxyUrl = normalizeUrl(data.proxyUrl) + '?key=' + encodeURIComponent(SEC);
-                
-                
+                const proxyUrl = normalizeUrl(data.proxyUrl);
+
                 if (data.type === 'embed') {
-                    ifr.src = proxyUrl;
+                    // Embeds: key goes in query string (iframes cannot send custom headers)
+                    ifr.src = proxyUrl + '?key=' + encodeURIComponent(SEC);
                     ifr.style.display = 'block';
                     vid.style.display = 'none';
                 } else {
+                    // Video stream: use short-lived token sent via custom header, never in URL
                     vid.style.display = 'block';
-                    ifr.style.display = 'none';
-                    vid.src = proxyUrl;
+                    ifr.style.display  = 'none';
+
+                    const streamToken = data.streamToken;
+
+                    // Destroy any previous HLS instance
+                    if (window._hlsInstance) {
+                        window._hlsInstance.destroy();
+                        window._hlsInstance = null;
+                    }
+
+                    if (typeof Hls !== 'undefined' && Hls.isSupported()) {
+                        // HLS.js: sends token as a custom header on every chunk request
+                        const hls = new Hls({
+                            xhrSetup: function (xhr) {
+                                xhr.setRequestHeader('x-stream-token', streamToken);
+                            },
+                            enableWorker: true,
+                            lowLatencyMode: false
+                        });
+                        hls.loadSource(proxyUrl);
+                        hls.attachMedia(vid);
+                        window._hlsInstance = hls;
+                    } else if (vid.canPlayType('application/vnd.apple.mpegurl')) {
+                        // Native HLS (Safari) — fallback, put token in URL only if necessary
+                        vid.src = proxyUrl + '?token=' + encodeURIComponent(streamToken);
+                    } else {
+                        // Last resort fallback (token in URL, still short-lived)
+                        vid.src = proxyUrl + '?token=' + encodeURIComponent(streamToken);
+                    }
                 }
 
                 load.style.display = 'none';
                 sec.classList.add('active');
                 btn.disabled = false;
+
             } catch (e) {
-                console.error('Load error:', e);
                 load.style.display = 'none';
                 err.textContent = '❌ ' + e.message;
                 err.style.display = 'block';
@@ -320,31 +323,25 @@
 
         function closeVideo() {
             document.getElementById('videoSection').classList.remove('active');
-            if (vid) {
-                vid.pause();
-                vid.src = '';
+            if (window._hlsInstance) {
+                window._hlsInstance.destroy();
+                window._hlsInstance = null;
             }
-            if (ifr) ifr.src = '';
+            if (vid) { vid.pause(); vid.src = ''; }
+            if (ifr) { ifr.src = ''; }
         }
 
-        // Event listeners
         document.getElementById('loadBtn').addEventListener('click', loadVideo);
         document.getElementById('closeBtn').addEventListener('click', closeVideo);
-        
-        // Handle Enter key
-        document.getElementById('videoUrl').addEventListener('keypress', function(e) {
-            if (e.key === 'Enter') {
-                loadVideo();
-            }
+        document.getElementById('videoUrl').addEventListener('keypress', function (e) {
+            if (e.key === 'Enter') loadVideo();
         });
 
         // Auto-hide errors after 5 seconds
         const errorEl = document.getElementById('error');
-        const observer = new MutationObserver(function() {
+        const observer = new MutationObserver(function () {
             if (errorEl.style.display === 'block') {
-                setTimeout(() => {
-                    errorEl.style.display = 'none';
-                }, 5000);
+                setTimeout(() => { errorEl.style.display = 'none'; }, 5000);
             }
         });
         observer.observe(errorEl, { attributes: true, attributeFilter: ['style'] });
@@ -353,103 +350,81 @@
         //  DRM / Anti-Download / Anti-Record Protections
         // ─────────────────────────────────────────────
 
-        // 1. Disable right-click on the entire document
+        // 1. Disable right-click everywhere
         document.addEventListener('contextmenu', function (e) {
             e.preventDefault();
             return false;
         });
 
-        // 2. Block keyboard shortcuts commonly used to download / inspect / record
+        // 2. Block keyboard shortcuts used to download / inspect / record
         document.addEventListener('keydown', function (e) {
             const key = e.key.toLowerCase();
+            const blockedWithCtrl = ['s', 'u', 'p', 'i', 'j', 'c'];
 
-            // Ctrl/Cmd + S  → Save page
-            // Ctrl/Cmd + U  → View source
-            // Ctrl/Cmd + Shift + I/J/C → DevTools
-            // Ctrl/Cmd + Shift + S → Screenshot (some browsers)
-            // F12 → DevTools
-            // Ctrl/Cmd + P  → Print (can capture frames)
-            const blockedKeys = ['s', 'u', 'p', 'i', 'j', 'c'];
-
-            if ((e.ctrlKey || e.metaKey) && blockedKeys.includes(key)) {
+            if ((e.ctrlKey || e.metaKey) && blockedWithCtrl.includes(key)) {
                 e.preventDefault();
                 return false;
             }
-
-            // Ctrl+Shift+I / Ctrl+Shift+J / Ctrl+Shift+C
             if ((e.ctrlKey || e.metaKey) && e.shiftKey && ['i', 'j', 'c'].includes(key)) {
                 e.preventDefault();
                 return false;
             }
-
-            // F12
-            if (e.key === 'F12') {
-                e.preventDefault();
-                return false;
-            }
-
-            // PrtScn (PrintScreen) – limited but worth blocking
-            if (e.key === 'PrintScreen') {
+            if (e.key === 'F12' || e.key === 'PrintScreen') {
                 e.preventDefault();
                 return false;
             }
         });
 
-        // 3. Disable drag-start on the video element (prevents drag-to-desktop)
+        // 3. Prevent drag-to-desktop
         document.addEventListener('dragstart', function (e) {
             e.preventDefault();
             return false;
         });
 
-        // 4. Detect DevTools open via window size change heuristic
-        //    and blur / hide the video when likely open
+        // 4. DevTools detection — pause & hide video if DevTools opened
         (function detectDevTools() {
             const threshold = 160;
             function check() {
-                const widthDiff  = window.outerWidth  - window.innerWidth;
-                const heightDiff = window.outerHeight - window.innerHeight;
-                if (widthDiff > threshold || heightDiff > threshold) {
-                    // DevTools likely open – pause and blank the video
-                    const v = document.getElementById('videoPlayer');
-                    if (v && !v.paused) {
-                        v.pause();
-                        v.style.visibility = 'hidden';
-                    }
-                    document.getElementById('iframePlayer').style.visibility = 'hidden';
+                const wDiff = window.outerWidth  - window.innerWidth;
+                const hDiff = window.outerHeight - window.innerHeight;
+                const v = document.getElementById('videoPlayer');
+                const f = document.getElementById('iframePlayer');
+                if (wDiff > threshold || hDiff > threshold) {
+                    if (v && !v.paused) v.pause();
+                    if (v) v.style.visibility = 'hidden';
+                    if (f) f.style.visibility = 'hidden';
                 } else {
-                    document.getElementById('videoPlayer').style.visibility  = 'visible';
-                    document.getElementById('iframePlayer').style.visibility = 'visible';
+                    if (v) v.style.visibility = 'visible';
+                    if (f) f.style.visibility = 'visible';
                 }
             }
             setInterval(check, 1000);
         })();
 
-        // 5. Block the MediaRecorder API so extensions can't capture the stream
+        // 5. Disable MediaRecorder API (used by screen-capture extensions)
         if (window.MediaRecorder) {
             window.MediaRecorder = undefined;
         }
 
-        // 6. Intercept getDisplayMedia (screen-capture API used by recording extensions)
+        // 6. Block getDisplayMedia (screen-capture API)
         if (navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia) {
             navigator.mediaDevices.getDisplayMedia = function () {
                 return Promise.reject(new DOMException(
-                    'Screen capture is disabled on this platform.',
-                    'NotAllowedError'
+                    'Screen capture is disabled on this platform.', 'NotAllowedError'
                 ));
             };
         }
 
-        // 7. Override getUserMedia to block screen/video capture attempts
+        // 7. Block getUserMedia for video (recording extensions)
         if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-            const _origGetUserMedia = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
+            const _orig = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
             navigator.mediaDevices.getUserMedia = function (constraints) {
                 if (constraints && constraints.video) {
                     return Promise.reject(new DOMException(
-                        'Video capture is disabled on this platform.',
-                        'NotAllowedError'
+                        'Video capture is disabled on this platform.', 'NotAllowedError'
                     ));
                 }
-                return _origGetUserMedia(constraints);
+                return _orig(constraints);
             };
         }
     </script>
