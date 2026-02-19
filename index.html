@@ -4,8 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Platform C - Video Player Pro</title>
-    <!-- HLS.js for chunked streaming (breaks IDM interception) -->
-    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest/dist/hls.min.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -158,14 +156,13 @@
             -webkit-user-drag: none;
             user-drag: none;
         }
-        /* Transparent overlay blocks right-click → "Save video as…" on the raw video surface */
         .video-overlay {
             position: absolute;
             top: 0; left: 0;
             width: 100%; height: 100%;
             z-index: 10;
             background: transparent;
-            pointer-events: none; /* pass clicks through to native controls */
+            pointer-events: none;
         }
     </style>
 </head>
@@ -220,7 +217,8 @@
         let ifr = null;
 
         function normalizeUrl(url) {
-            return url.replace(/([^:]\/\/+)/g, m => m[0] + m.slice(1).replace(/\/+/g, '/'));
+            // Remove accidental double slashes but keep protocol intact
+            return url.replace(/([^:])\/\/+/g, '$1/');
         }
 
         async function loadVideo() {
@@ -233,7 +231,7 @@
             const btn  = document.getElementById('loadBtn');
 
             if (!url || !url.includes('/video/')) {
-                err.textContent = '❌ Invalid URL - Must contain /video/';
+                err.textContent = '❌ Invalid URL — must contain /video/';
                 err.style.display = 'block';
                 return;
             }
@@ -260,53 +258,37 @@
                 });
 
                 if (!res.ok) {
-                    throw new Error('Failed to fetch video (Status: ' + res.status + ')');
+                    if (res.status === 403) throw new Error('Access denied — check your security key');
+                    if (res.status === 404) throw new Error('Video not found');
+                    throw new Error('Failed to load video (Status: ' + res.status + ')');
                 }
 
                 const data = await res.json();
-                if (!data.success) {
-                    throw new Error(data.message || 'Failed to load video');
-                }
+                if (!data.success) throw new Error(data.message || 'Failed to load video');
 
                 const proxyUrl = normalizeUrl(data.proxyUrl);
 
                 if (data.type === 'embed') {
-                    // Embeds: key goes in query string (iframes cannot send custom headers)
+                    // Embeds (YouTube, Vimeo, etc.) — key in query string, iframes can't send headers
                     ifr.src = proxyUrl + '?key=' + encodeURIComponent(SEC);
                     ifr.style.display = 'block';
                     vid.style.display = 'none';
+
                 } else {
-                    // Video stream: use short-lived token sent via custom header, never in URL
+                    // Direct video stream (Dropbox, Google Drive, etc.)
+                    // Use the short-lived streamToken returned by Platform B
+                    // Token goes in query string because XHR headers on <video> src aren't possible
+                    // The token expires in 5 minutes so copied URLs won't work after that
                     vid.style.display = 'block';
-                    ifr.style.display  = 'none';
+                    ifr.style.display = 'none';
 
                     const streamToken = data.streamToken;
+                    if (!streamToken) throw new Error('No stream token received from server');
 
-                    // Destroy any previous HLS instance
-                    if (window._hlsInstance) {
-                        window._hlsInstance.destroy();
-                        window._hlsInstance = null;
-                    }
-
-                    if (typeof Hls !== 'undefined' && Hls.isSupported()) {
-                        // HLS.js: sends token as a custom header on every chunk request
-                        const hls = new Hls({
-                            xhrSetup: function (xhr) {
-                                xhr.setRequestHeader('x-stream-token', streamToken);
-                            },
-                            enableWorker: true,
-                            lowLatencyMode: false
-                        });
-                        hls.loadSource(proxyUrl);
-                        hls.attachMedia(vid);
-                        window._hlsInstance = hls;
-                    } else if (vid.canPlayType('application/vnd.apple.mpegurl')) {
-                        // Native HLS (Safari) — fallback, put token in URL only if necessary
-                        vid.src = proxyUrl + '?token=' + encodeURIComponent(streamToken);
-                    } else {
-                        // Last resort fallback (token in URL, still short-lived)
-                        vid.src = proxyUrl + '?token=' + encodeURIComponent(streamToken);
-                    }
+                    // Set video source with short-lived token in query string
+                    // (This is still much more secure than the permanent master key)
+                    vid.src = proxyUrl + '?token=' + encodeURIComponent(streamToken);
+                    vid.load();
                 }
 
                 load.style.display = 'none';
@@ -323,10 +305,6 @@
 
         function closeVideo() {
             document.getElementById('videoSection').classList.remove('active');
-            if (window._hlsInstance) {
-                window._hlsInstance.destroy();
-                window._hlsInstance = null;
-            }
             if (vid) { vid.pause(); vid.src = ''; }
             if (ifr) { ifr.src = ''; }
         }
@@ -337,11 +315,11 @@
             if (e.key === 'Enter') loadVideo();
         });
 
-        // Auto-hide errors after 5 seconds
+        // Auto-hide errors after 6 seconds
         const errorEl = document.getElementById('error');
         const observer = new MutationObserver(function () {
             if (errorEl.style.display === 'block') {
-                setTimeout(() => { errorEl.style.display = 'none'; }, 5000);
+                setTimeout(() => { errorEl.style.display = 'none'; }, 6000);
             }
         });
         observer.observe(errorEl, { attributes: true, attributeFilter: ['style'] });
@@ -360,25 +338,20 @@
         document.addEventListener('keydown', function (e) {
             const key = e.key.toLowerCase();
             const blockedWithCtrl = ['s', 'u', 'p', 'i', 'j', 'c'];
-
             if ((e.ctrlKey || e.metaKey) && blockedWithCtrl.includes(key)) {
-                e.preventDefault();
-                return false;
+                e.preventDefault(); return false;
             }
             if ((e.ctrlKey || e.metaKey) && e.shiftKey && ['i', 'j', 'c'].includes(key)) {
-                e.preventDefault();
-                return false;
+                e.preventDefault(); return false;
             }
             if (e.key === 'F12' || e.key === 'PrintScreen') {
-                e.preventDefault();
-                return false;
+                e.preventDefault(); return false;
             }
         });
 
         // 3. Prevent drag-to-desktop
         document.addEventListener('dragstart', function (e) {
-            e.preventDefault();
-            return false;
+            e.preventDefault(); return false;
         });
 
         // 4. DevTools detection — pause & hide video if DevTools opened
@@ -401,10 +374,8 @@
             setInterval(check, 1000);
         })();
 
-        // 5. Disable MediaRecorder API (used by screen-capture extensions)
-        if (window.MediaRecorder) {
-            window.MediaRecorder = undefined;
-        }
+        // 5. Disable MediaRecorder API
+        if (window.MediaRecorder) window.MediaRecorder = undefined;
 
         // 6. Block getDisplayMedia (screen-capture API)
         if (navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia) {
@@ -415,7 +386,7 @@
             };
         }
 
-        // 7. Block getUserMedia for video (recording extensions)
+        // 7. Block getUserMedia for video
         if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
             const _orig = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
             navigator.mediaDevices.getUserMedia = function (constraints) {
