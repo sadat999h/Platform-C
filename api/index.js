@@ -1,7 +1,6 @@
-// api/index.js - Platform C Player
-// This is the serverless function version for Platform C
+// api/index.js - Platform C Player (serverless handler)
+// IMPORTANT: MASTER_SECURITY_STRING must match Platform B exactly
 
-// IMPORTANT: This MUST match Platform B's MASTER_SECURITY_STRING
 const MASTER_SECURITY_STRING = '84418779257393762955868022673598';
 
 export default function handler(req, res) {
@@ -15,7 +14,6 @@ export default function handler(req, res) {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Platform C - Video Player Pro</title>
-    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest/dist/hls.min.js"><\/script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -270,14 +268,14 @@ export default function handler(req, res) {
         let ifr = null;
 
         function normalizeUrl(url) {
-            return url.replace(/([^:]\/\/+)/g, m => m[0] + m.slice(1).replace(/\\/+/g, '/'));
+            return url.replace(/([^:])\/\/+/g, '$1/');
         }
 
         function isRawVideoUrl(url) {
             const rawDomains = ['dropbox.com', 'drive.google.com', 'youtube.com', 'youtu.be', 'vimeo.com', 'dailymotion.com'];
             try {
                 const urlObj = new URL(url);
-                return rawDomains.some(domain => urlObj.hostname.includes(domain));
+                return rawDomains.some(d => urlObj.hostname.includes(d));
             } catch { return false; }
         }
 
@@ -335,9 +333,9 @@ export default function handler(req, res) {
                 });
 
                 if (!res.ok) {
-                    if (res.status === 403) throw new Error('Security key mismatch - Check your configuration');
-                    if (res.status === 404) throw new Error('Video not found - The video ID may be incorrect');
-                    if (res.status === 500) throw new Error('Server error - Check Platform B logs');
+                    if (res.status === 403) throw new Error('Access denied — security key mismatch');
+                    if (res.status === 404) throw new Error('Video not found — check the video ID');
+                    if (res.status === 500) throw new Error('Server error — check Platform B');
                     throw new Error('Failed to fetch video (Status: ' + res.status + ')');
                 }
 
@@ -347,36 +345,20 @@ export default function handler(req, res) {
                 const proxyUrl = normalizeUrl(data.proxyUrl);
 
                 if (data.type === 'embed') {
+                    // Embeds: key in query string (iframes can't send custom headers)
                     ifr.src = proxyUrl + '?key=' + encodeURIComponent(SEC);
                     ifr.style.display = 'block';
                     vid.style.display = 'none';
                 } else {
+                    // Direct video stream with short-lived token (expires in 5 minutes)
                     vid.style.display = 'block';
                     ifr.style.display = 'none';
 
                     const streamToken = data.streamToken;
+                    if (!streamToken) throw new Error('No stream token received from server');
 
-                    if (window._hlsInstance) {
-                        window._hlsInstance.destroy();
-                        window._hlsInstance = null;
-                    }
-
-                    if (typeof Hls !== 'undefined' && Hls.isSupported()) {
-                        const hls = new Hls({
-                            xhrSetup: function (xhr) {
-                                xhr.setRequestHeader('x-stream-token', streamToken);
-                            },
-                            enableWorker: true,
-                            lowLatencyMode: false
-                        });
-                        hls.loadSource(proxyUrl);
-                        hls.attachMedia(vid);
-                        window._hlsInstance = hls;
-                    } else if (vid.canPlayType('application/vnd.apple.mpegurl')) {
-                        vid.src = proxyUrl + '?token=' + encodeURIComponent(streamToken);
-                    } else {
-                        vid.src = proxyUrl + '?token=' + encodeURIComponent(streamToken);
-                    }
+                    vid.src = proxyUrl + '?token=' + encodeURIComponent(streamToken);
+                    vid.load();
                 }
 
                 load.style.display = 'none';
@@ -393,10 +375,6 @@ export default function handler(req, res) {
 
         function closeVideo() {
             document.getElementById('videoSection').classList.remove('active');
-            if (window._hlsInstance) {
-                window._hlsInstance.destroy();
-                window._hlsInstance = null;
-            }
             if (vid) { vid.pause(); vid.src = ''; }
             if (ifr) { ifr.src = ''; }
         }
