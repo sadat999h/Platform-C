@@ -116,7 +116,12 @@ export default function handler(req, res) {
         let ifr = null;
         let _mediaSource = null;
         let _sourceBuffer = null;
-        let _chunkState = null;
+        let _chunkState   = null;
+        let _stopped      = false;
+
+        const BUFFER_AHEAD_MAX = 60;
+        const BUFFER_AHEAD_MIN = 15;
+        const INITIAL_BUFFER   = 8;
 
         function normalizeUrl(url) {
             return url.replace(/([^:])\\\/\\\/+/g, '$1/');
@@ -135,14 +140,58 @@ export default function handler(req, res) {
             });
             if (response.status === 204) return { done: true, nextToken: null, buffer: null };
             if (!response.ok && response.status !== 206)
-                throw new Error('Chunk fetch failed: ' + response.status);
+                throw new Error('Chunk ' + chunkIndex + ' failed: ' + response.status);
             const nextToken   = response.headers.get('x-next-chunk-token') || '';
             const isLastChunk = response.headers.get('x-is-last-chunk') === 'true';
             const buffer      = await response.arrayBuffer();
             return { done: isLastChunk || !nextToken, nextToken, buffer };
         }
 
+        async function appendToSourceBuffer(buffer) {
+            if (_stopped || !_sourceBuffer || !_mediaSource || _mediaSource.readyState !== 'open') return;
+            if (_sourceBuffer.updating) {
+                await new Promise((res, rej) => {
+                    _sourceBuffer.addEventListener('updateend', res, { once: true });
+                    _sourceBuffer.addEventListener('error', rej, { once: true });
+                });
+            }
+            await new Promise((resolve, reject) => {
+                _sourceBuffer.addEventListener('updateend', resolve, { once: true });
+                _sourceBuffer.addEventListener('error', reject, { once: true });
+                try {
+                    _sourceBuffer.appendBuffer(buffer);
+                } catch (e) {
+                    if (e.name === 'QuotaExceededError') {
+                        try {
+                            const evictEnd = Math.max(0, (vid ? vid.currentTime : 0) - 30);
+                            if (evictEnd > 0) {
+                                _sourceBuffer.remove(0, evictEnd);
+                                _sourceBuffer.addEventListener('updateend', () => {
+                                    try { _sourceBuffer.appendBuffer(buffer); } catch (_) { resolve(); }
+                                }, { once: true });
+                            } else { resolve(); }
+                        } catch (_) { resolve(); }
+                    } else { reject(e); }
+                }
+            });
+        }
+
+        function getBufferedAhead() {
+            if (!vid || !vid.buffered || vid.buffered.length === 0) return 0;
+            const ct = vid.currentTime;
+            for (let i = 0; i < vid.buffered.length; i++) {
+                if (vid.buffered.start(i) <= ct + 0.5 && vid.buffered.end(i) > ct)
+                    return vid.buffered.end(i) - ct;
+            }
+            return 0;
+        }
+
         async function startChunkedStream(chunkUrl, firstChunkToken, streamToken, infoUrl) {
+            _stopped = false;
+            const bufWrap  = document.getElementById('bufferWrap');
+            const bufBar   = document.getElementById('bufferBar');
+            const bufLabel = document.getElementById('bufferLabel');
+
             let totalChunks = null;
             try {
                 const infoRes = await fetch(infoUrl, {
@@ -154,63 +203,108 @@ export default function handler(req, res) {
                 }
             } catch (_) {}
 
-            const bufWrap  = document.getElementById('bufferWrap');
-            const bufBar   = document.getElementById('bufferBar');
-            const bufLabel = document.getElementById('bufferLabel');
-            if (totalChunks) { bufWrap.style.display = 'block'; bufLabel.textContent = 'Buffering...'; }
+            bufWrap.style.display = 'block';
+            bufLabel.textContent  = 'Connecting...';
 
             if (_mediaSource) { try { _mediaSource.endOfStream(); } catch (_) {} }
             _mediaSource = new MediaSource();
             vid.src = URL.createObjectURL(_mediaSource);
+            vid.preload = 'auto';
 
             await new Promise((resolve, reject) => {
                 _mediaSource.addEventListener('sourceopen', resolve, { once: true });
                 _mediaSource.addEventListener('error', reject, { once: true });
             });
 
-            let mimeType = 'video/mp4; codecs="avc1.42E01E, mp4a.40.2"';
-            if (!MediaSource.isTypeSupported(mimeType)) mimeType = 'video/mp4';
-            if (!MediaSource.isTypeSupported(mimeType)) throw new Error('MSE_UNSUPPORTED');
+            const mimeTypes = [
+                'video/mp4; codecs="avc1.42E01E, mp4a.40.2"',
+                'video/mp4; codecs="avc1.64001f, mp4a.40.2"',
+                'video/mp4'
+            ];
+            const mimeType = mimeTypes.find(m => MediaSource.isTypeSupported(m));
+            if (!mimeType) throw new Error('MSE_UNSUPPORTED');
 
             _sourceBuffer = _mediaSource.addSourceBuffer(mimeType);
             _sourceBuffer.mode = 'sequence';
 
-            _chunkState = { chunkUrl, currentToken: firstChunkToken, chunkIndex: 0, totalChunks, done: false };
+            _chunkState = {
+                chunkUrl, currentToken: firstChunkToken,
+                chunkIndex: 0, totalChunks, done: false,
+                fetching: false, prefetchedChunk: null
+            };
 
-            async function pumpChunks() {
-                if (_chunkState.done) {
-                    try { _mediaSource.endOfStream(); } catch (_) {}
-                    bufLabel.textContent = 'Fully loaded';
-                    return;
-                }
-                if (_sourceBuffer.updating) {
-                    await new Promise(r => _sourceBuffer.addEventListener('updateend', r, { once: true }));
-                }
+            let playbackStarted = false;
+
+            function updateBufferUI() {
+                if (!totalChunks) return;
+                const pct   = Math.min(100, Math.round((_chunkState.chunkIndex / totalChunks) * 100));
+                const ahead = getBufferedAhead();
+                bufBar.style.width = pct + '%';
+                bufLabel.textContent = _chunkState.done
+                    ? 'Fully loaded \u2713'
+                    : 'Buffered: ' + pct + '% (' + Math.round(ahead) + 's ahead)';
+            }
+
+            vid.addEventListener('waiting', () => {
+                if (!_chunkState.fetching && !_chunkState.done && !_stopped) pump();
+            });
+            vid.addEventListener('timeupdate', updateBufferUI);
+
+            async function pump() {
+                if (_stopped || _chunkState.done || _chunkState.fetching) return;
+                _chunkState.fetching = true;
                 try {
-                    const { done, nextToken, buffer } = await fetchChunk(
-                        _chunkState.chunkUrl, _chunkState.chunkIndex, _chunkState.currentToken
-                    );
-                    if (buffer && buffer.byteLength > 0) {
-                        await new Promise((resolve, reject) => {
-                            _sourceBuffer.addEventListener('updateend', resolve, { once: true });
-                            _sourceBuffer.addEventListener('error', reject, { once: true });
-                            try { _sourceBuffer.appendBuffer(buffer); } catch (e) { reject(e); }
-                        });
+                    while (!_stopped && !_chunkState.done) {
+                        const ahead = getBufferedAhead();
+                        if (playbackStarted && ahead >= BUFFER_AHEAD_MAX) {
+                            _chunkState.fetching = false;
+                            const resumeCheck = setInterval(() => {
+                                if (_stopped || _chunkState.done) { clearInterval(resumeCheck); return; }
+                                if (getBufferedAhead() < BUFFER_AHEAD_MIN) { clearInterval(resumeCheck); pump(); }
+                            }, 2000);
+                            return;
+                        }
+
+                        let chunkData;
+                        if (_chunkState.prefetchedChunk) {
+                            chunkData = _chunkState.prefetchedChunk;
+                            _chunkState.prefetchedChunk = null;
+                        } else {
+                            chunkData = await fetchChunk(_chunkState.chunkUrl, _chunkState.chunkIndex, _chunkState.currentToken);
+                        }
+
+                        let prefetchPromise = null;
+                        if (!chunkData.done && chunkData.nextToken) {
+                            prefetchPromise = fetchChunk(_chunkState.chunkUrl, _chunkState.chunkIndex + 1, chunkData.nextToken)
+                                .then(c => { _chunkState.prefetchedChunk = c; }).catch(() => {});
+                        }
+
+                        if (chunkData.buffer && chunkData.buffer.byteLength > 0)
+                            await appendToSourceBuffer(chunkData.buffer);
+
+                        _chunkState.chunkIndex++;
+                        _chunkState.currentToken = chunkData.nextToken;
+                        _chunkState.done = chunkData.done;
+                        updateBufferUI();
+
+                        if (!playbackStarted && getBufferedAhead() >= INITIAL_BUFFER) {
+                            playbackStarted = true;
+                            bufLabel.textContent = 'Playing...';
+                            vid.play().catch(() => {});
+                        }
+
+                        if (prefetchPromise) await prefetchPromise;
                     }
-                    _chunkState.chunkIndex++;
-                    _chunkState.currentToken = nextToken;
-                    _chunkState.done = done;
-                    if (totalChunks) {
-                        const pct = Math.min(100, Math.round((_chunkState.chunkIndex / totalChunks) * 100));
-                        bufBar.style.width = pct + '%';
-                        bufLabel.textContent = 'Buffered: ' + pct + '%';
+                    if (!_stopped && _mediaSource && _mediaSource.readyState === 'open') {
+                        try { _mediaSource.endOfStream(); } catch (_) {}
                     }
-                    pumpChunks();
+                    updateBufferUI();
                 } catch (e) {
-                    if (!_chunkState.done) setTimeout(pumpChunks, 1000);
+                    _chunkState.fetching = false;
+                    if (!_stopped) { bufLabel.textContent = 'Retrying...'; setTimeout(() => { if (!_stopped) pump(); }, 2000); }
                 }
             }
-            pumpChunks();
+            pump();
         }
 
         async function loadVideo() {
@@ -300,6 +394,7 @@ export default function handler(req, res) {
         }
 
         function closeVideo() {
+            _stopped = true;
             document.getElementById('videoSection').classList.remove('active');
             document.getElementById('bufferWrap').style.display = 'none';
             document.getElementById('bufferLabel').textContent = '';
