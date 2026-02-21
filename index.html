@@ -233,51 +233,98 @@
 
     let vid = null;
     let ifr = null;
-    let _mediaSource = null;
+    let _mediaSource  = null;
     let _sourceBuffer = null;
-    let _chunkState  = null; // { chunkUrl, currentToken, chunkIndex, totalChunks, contentType, done }
+    let _chunkState   = null;
+    let _stopped      = false;
+
+    // How many seconds ahead of current playhead we want buffered before we pause fetching
+    const BUFFER_AHEAD_MAX = 60;   // stop fetching if we have 60s buffered ahead
+    const BUFFER_AHEAD_MIN = 15;   // resume fetching if buffer drops below 15s ahead
+    const INITIAL_BUFFER   = 8;    // seconds to buffer before allowing playback to start
 
     function normalizeUrl(url) {
         return url.replace(/([^:])\/\/+/g, '$1/');
     }
 
-    // ── Chunked MediaSource Player ──
-    // Fetches video in 2MB chunks using chained per-chunk tokens.
-    // IDM intercepts the <video> src — but our src is a blob:// URL fed by MediaSource.
-    // The actual chunk URLs are never set as the video src, and each one requires
-    // a token that only arrives in the *response headers* of the previous chunk.
-    // IDM cannot pre-fetch or bulk-download chunks without processing each response.
-
+    // ── Fetch one chunk from Platform B ──
+    // Returns { done, nextToken, buffer }
     async function fetchChunk(chunkUrl, chunkIndex, chunkToken) {
-        const url = `${chunkUrl}?chunk=${chunkIndex}`;
+        const url = chunkUrl + '?chunk=' + chunkIndex;
         const response = await fetch(url, {
-            headers: {
-                'x-chunk-token': chunkToken,
-                'Origin': window.location.origin
-            }
+            headers: { 'x-chunk-token': chunkToken, 'Origin': window.location.origin }
         });
 
-        if (response.status === 204) {
-            // No more chunks
-            return { done: true, nextToken: null, buffer: null };
-        }
-
-        if (!response.ok && response.status !== 206) {
-            throw new Error(`Chunk fetch failed: ${response.status}`);
-        }
+        if (response.status === 204) return { done: true, nextToken: null, buffer: null };
+        if (!response.ok && response.status !== 206)
+            throw new Error('Chunk ' + chunkIndex + ' failed: ' + response.status);
 
         const nextToken   = response.headers.get('x-next-chunk-token') || '';
         const isLastChunk = response.headers.get('x-is-last-chunk') === 'true';
         const buffer      = await response.arrayBuffer();
-
         return { done: isLastChunk || !nextToken, nextToken, buffer };
     }
 
-    async function startChunkedStream(chunkUrl, firstChunkToken, streamToken, infoUrl) {
-        // First, get video metadata (total size, content type)
-        let contentType = 'video/mp4; codecs="avc1.42E01E, mp4a.40.2"';
-        let totalChunks = null;
+    // ── Append a buffer to SourceBuffer safely ──
+    async function appendToSourceBuffer(buffer) {
+        if (_stopped || !_sourceBuffer || !_mediaSource || _mediaSource.readyState !== 'open') return;
+        if (_sourceBuffer.updating) {
+            await new Promise((res, rej) => {
+                _sourceBuffer.addEventListener('updateend', res, { once: true });
+                _sourceBuffer.addEventListener('error', rej,   { once: true });
+            });
+        }
+        await new Promise((resolve, reject) => {
+            _sourceBuffer.addEventListener('updateend', resolve, { once: true });
+            _sourceBuffer.addEventListener('error',     reject,  { once: true });
+            try {
+                _sourceBuffer.appendBuffer(buffer);
+            } catch (e) {
+                // QuotaExceededError — evict old buffered data behind playhead then retry
+                if (e.name === 'QuotaExceededError') {
+                    try {
+                        const currentTime = vid ? vid.currentTime : 0;
+                        const evictEnd = Math.max(0, currentTime - 30); // keep last 30s
+                        if (evictEnd > 0) {
+                            _sourceBuffer.remove(0, evictEnd);
+                            _sourceBuffer.addEventListener('updateend', () => {
+                                try { _sourceBuffer.appendBuffer(buffer); } catch (_) { resolve(); }
+                            }, { once: true });
+                        } else {
+                            resolve(); // can't evict, skip this chunk
+                        }
+                    } catch (_) { resolve(); }
+                } else {
+                    reject(e);
+                }
+            }
+        });
+    }
 
+    // ── How many seconds are buffered ahead of current playhead ──
+    function getBufferedAhead() {
+        if (!vid || !vid.buffered || vid.buffered.length === 0) return 0;
+        const currentTime = vid.currentTime;
+        for (let i = 0; i < vid.buffered.length; i++) {
+            if (vid.buffered.start(i) <= currentTime + 0.5 && vid.buffered.end(i) > currentTime) {
+                return vid.buffered.end(i) - currentTime;
+            }
+        }
+        return 0;
+    }
+
+    // ── Main streaming engine ──
+    // Pre-fetches the next chunk WHILE the current one is being appended.
+    // Pauses fetching when buffer is healthy, resumes when it drains.
+    async function startChunkedStream(chunkUrl, firstChunkToken, streamToken, infoUrl) {
+        _stopped = false;
+
+        const bufWrap  = document.getElementById('bufferWrap');
+        const bufBar   = document.getElementById('bufferBar');
+        const bufLabel = document.getElementById('bufferLabel');
+
+        // Get total info for progress bar
+        let totalChunks = null;
         try {
             const infoRes = await fetch(infoUrl, {
                 headers: { 'x-stream-token': streamToken, 'Origin': window.location.origin }
@@ -285,105 +332,157 @@
             if (infoRes.ok) {
                 const info = await infoRes.json();
                 if (info.totalChunks) totalChunks = info.totalChunks;
-                if (info.contentType) {
-                    // MediaSource needs codec info — use a safe default for mp4
-                    contentType = 'video/mp4; codecs="avc1.42E01E, mp4a.40.2"';
-                }
             }
         } catch (_) {}
 
-        // Show buffer bar
-        const bufWrap  = document.getElementById('bufferWrap');
-        const bufBar   = document.getElementById('bufferBar');
-        const bufLabel = document.getElementById('bufferLabel');
-        if (totalChunks) {
-            bufWrap.style.display = 'block';
-            bufLabel.textContent  = 'Buffering...';
-        }
+        bufWrap.style.display = 'block';
+        bufLabel.textContent  = 'Connecting...';
 
         // Set up MediaSource
-        if (_mediaSource) {
-            try { _mediaSource.endOfStream(); } catch (_) {}
-        }
+        if (_mediaSource) { try { _mediaSource.endOfStream(); } catch (_) {} }
         _mediaSource = new MediaSource();
         vid.src = URL.createObjectURL(_mediaSource);
+        vid.preload = 'auto';
 
         await new Promise((resolve, reject) => {
             _mediaSource.addEventListener('sourceopen', resolve, { once: true });
-            _mediaSource.addEventListener('error', reject, { once: true });
+            _mediaSource.addEventListener('error', reject,       { once: true });
         });
 
-        // Try to add a SourceBuffer — fall back to video/mp4 without codec if browser rejects
-        let mimeType = contentType;
-        if (!MediaSource.isTypeSupported(mimeType)) {
-            mimeType = 'video/mp4';
-        }
-        if (!MediaSource.isTypeSupported(mimeType)) {
-            // Browser doesn't support MSE for this type — fall back to direct src
-            throw new Error('MSE_UNSUPPORTED');
-        }
+        // Pick MIME type — try with codecs first, fall back to plain video/mp4
+        const mimeTypes = [
+            'video/mp4; codecs="avc1.42E01E, mp4a.40.2"',
+            'video/mp4; codecs="avc1.64001f, mp4a.40.2"',
+            'video/mp4'
+        ];
+        let mimeType = mimeTypes.find(m => MediaSource.isTypeSupported(m));
+        if (!mimeType) throw new Error('MSE_UNSUPPORTED');
 
         _sourceBuffer = _mediaSource.addSourceBuffer(mimeType);
         _sourceBuffer.mode = 'sequence';
 
         _chunkState = {
-            chunkUrl, currentToken: firstChunkToken,
-            chunkIndex: 0, totalChunks,
-            done: false
+            chunkUrl,
+            currentToken: firstChunkToken,
+            chunkIndex: 0,
+            totalChunks,
+            done: false,
+            fetching: false,
+            prefetchedChunk: null  // { buffer, nextToken, done } — next chunk ready to append
         };
 
-        // Append chunks as the buffer drains
-        async function pumpChunks() {
+        let playbackStarted = false;
+
+        // ── Buffer health monitor ──
+        // Watches bufferedAhead and auto-pauses/resumes fetching
+        // Also handles the "waiting" event to restart pumping if the video stalls
+        function updateBufferUI() {
+            if (!totalChunks) return;
+            const pct = Math.min(100, Math.round((_chunkState.chunkIndex / totalChunks) * 100));
+            bufBar.style.width = pct + '%';
+            const ahead = getBufferedAhead();
             if (_chunkState.done) {
-                try { _mediaSource.endOfStream(); } catch (_) {}
-                bufLabel.textContent = 'Fully loaded';
-                return;
+                bufLabel.textContent = 'Fully loaded ✓';
+            } else {
+                bufLabel.textContent = 'Buffered: ' + pct + '% (' + Math.round(ahead) + 's ahead)';
             }
-            if (_sourceBuffer.updating) {
-                // Wait for buffer update to finish before appending next chunk
-                await new Promise(r => _sourceBuffer.addEventListener('updateend', r, { once: true }));
+        }
+
+        vid.addEventListener('waiting', () => {
+            // Video stalled — kick the pump if it's paused due to full buffer
+            if (!_chunkState.fetching && !_chunkState.done && !_stopped) {
+                pump();
             }
+        });
+
+        vid.addEventListener('timeupdate', updateBufferUI);
+
+        // ── Core pump: fetch → append → pre-fetch next → loop ──
+        async function pump() {
+            if (_stopped || _chunkState.done || _chunkState.fetching) return;
+            _chunkState.fetching = true;
 
             try {
-                const { done, nextToken, buffer } = await fetchChunk(
-                    _chunkState.chunkUrl, _chunkState.chunkIndex, _chunkState.currentToken
-                );
+                while (!_stopped && !_chunkState.done) {
+                    const ahead = getBufferedAhead();
 
-                if (buffer && buffer.byteLength > 0) {
-                    await new Promise((resolve, reject) => {
-                        _sourceBuffer.addEventListener('updateend', resolve, { once: true });
-                        _sourceBuffer.addEventListener('error', reject, { once: true });
-                        try {
-                            _sourceBuffer.appendBuffer(buffer);
-                        } catch (e) {
-                            reject(e);
-                        }
-                    });
+                    // If buffer is healthy and we've started playback, pause fetching
+                    if (playbackStarted && ahead >= BUFFER_AHEAD_MAX) {
+                        _chunkState.fetching = false;
+                        // Resume when buffer drains — checked via 'waiting' event and a poll
+                        const resumeCheck = setInterval(() => {
+                            if (_stopped || _chunkState.done) { clearInterval(resumeCheck); return; }
+                            if (getBufferedAhead() < BUFFER_AHEAD_MIN) {
+                                clearInterval(resumeCheck);
+                                pump();
+                            }
+                        }, 2000);
+                        return;
+                    }
+
+                    // Use pre-fetched chunk if available, otherwise fetch now
+                    let chunkData;
+                    if (_chunkState.prefetchedChunk) {
+                        chunkData = _chunkState.prefetchedChunk;
+                        _chunkState.prefetchedChunk = null;
+                    } else {
+                        chunkData = await fetchChunk(
+                            _chunkState.chunkUrl,
+                            _chunkState.chunkIndex,
+                            _chunkState.currentToken
+                        );
+                    }
+
+                    // Start pre-fetching NEXT chunk in parallel while we append this one
+                    let prefetchPromise = null;
+                    if (!chunkData.done && chunkData.nextToken) {
+                        prefetchPromise = fetchChunk(
+                            _chunkState.chunkUrl,
+                            _chunkState.chunkIndex + 1,
+                            chunkData.nextToken
+                        ).then(c => { _chunkState.prefetchedChunk = c; }).catch(() => {});
+                    }
+
+                    // Append current chunk
+                    if (chunkData.buffer && chunkData.buffer.byteLength > 0) {
+                        await appendToSourceBuffer(chunkData.buffer);
+                    }
+
+                    _chunkState.chunkIndex++;
+                    _chunkState.currentToken = chunkData.nextToken;
+                    _chunkState.done = chunkData.done;
+
+                    updateBufferUI();
+
+                    // Allow playback to start once we have enough initial buffer
+                    if (!playbackStarted && getBufferedAhead() >= INITIAL_BUFFER) {
+                        playbackStarted = true;
+                        bufLabel.textContent = 'Playing...';
+                        vid.play().catch(() => {});
+                    }
+
+                    // Wait for pre-fetch to complete before next iteration
+                    if (prefetchPromise) await prefetchPromise;
                 }
 
-                _chunkState.chunkIndex++;
-                _chunkState.currentToken = nextToken;
-                _chunkState.done = done;
-
-                // Update buffer bar
-                if (totalChunks) {
-                    const pct = Math.min(100, Math.round((_chunkState.chunkIndex / totalChunks) * 100));
-                    bufBar.style.width  = pct + '%';
-                    bufLabel.textContent = `Buffered: ${pct}%`;
+                // All chunks done
+                if (!_stopped && _mediaSource && _mediaSource.readyState === 'open') {
+                    try { _mediaSource.endOfStream(); } catch (_) {}
                 }
-
-                // Continue pumping
-                pumpChunks();
+                updateBufferUI();
 
             } catch (e) {
-                if (!_chunkState.done) {
-                    // Retry once after a short delay
-                    setTimeout(pumpChunks, 1000);
+                _chunkState.fetching = false;
+                if (!_stopped) {
+                    // Network error — retry after 2 seconds
+                    bufLabel.textContent = 'Retrying...';
+                    setTimeout(() => { if (!_stopped) pump(); }, 2000);
                 }
             }
         }
 
-        pumpChunks();
+        // Start pumping immediately
+        pump();
     }
 
     async function loadVideo() {
@@ -480,6 +579,7 @@
     }
 
     function closeVideo() {
+        _stopped = true;
         document.getElementById('videoSection').classList.remove('active');
         document.getElementById('bufferWrap').style.display = 'none';
         document.getElementById('bufferLabel').textContent = '';
