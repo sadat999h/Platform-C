@@ -11,72 +11,68 @@ export default function handler(req, res) {
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Video Player Pro</title>
+<!-- mp4box.js: reads unfragmented MP4, re-segments it into fMP4 for MSE -->
+<script src="https://cdn.jsdelivr.net/npm/mp4box@0.5.2/dist/mp4box.all.min.js"></script>
 <style>
-* { margin: 0; padding: 0; box-sizing: border-box; }
-body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0a0a0a; color: #fff; min-height: 100vh; }
-.hdr { background: linear-gradient(135deg, #1a1a2e, #16213e); padding: 18px 24px; box-shadow: 0 2px 20px rgba(0,0,0,.5); }
-.hdr-in { max-width: 1200px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; }
-.logo { font-size: 24px; font-weight: 700; background: linear-gradient(135deg, #667eea, #764ba2); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
-.badge { background: rgba(76,175,80,.2); color: #4caf50; padding: 5px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; }
-.wrap { max-width: 1200px; margin: 0 auto; padding: 32px 20px; }
-.card { background: linear-gradient(135deg, #1a1a2e, #16213e); border-radius: 16px; padding: 32px; margin-bottom: 24px; box-shadow: 0 8px 32px rgba(0,0,0,.3); }
-.card-title { font-size: 20px; font-weight: 700; margin-bottom: 16px; background: linear-gradient(135deg, #667eea, #764ba2); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
-input[type=url] { width: 100%; padding: 14px 16px; background: rgba(255,255,255,.06); border: 2px solid rgba(255,255,255,.1); border-radius: 10px; color: #fff; font-size: 15px; margin-bottom: 16px; transition: border-color .2s; }
-input:focus { outline: none; border-color: #667eea; }
-input::placeholder { color: rgba(255,255,255,.35); }
-.btn { padding: 14px 36px; background: linear-gradient(135deg, #667eea, #764ba2); color: #fff; border: none; border-radius: 10px; font-size: 15px; font-weight: 600; cursor: pointer; transition: transform .15s, opacity .15s; }
-.btn:hover:not(:disabled) { transform: translateY(-2px); }
-.btn:disabled { opacity: .5; cursor: not-allowed; }
-.sbadge { display: inline-block; margin-top: 12px; background: rgba(76,175,80,.12); color: #4caf50; border: 1px solid rgba(76,175,80,.28); padding: 6px 12px; border-radius: 6px; font-size: 11px; }
-.err { background: rgba(244,67,54,.14); border: 1px solid rgba(244,67,54,.3); color: #f44336; padding: 12px 16px; border-radius: 10px; margin-top: 12px; display: none; }
-#vSec { display: none; }
-#vSec.on { display: block; }
-.ph { display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px; }
-.ptitle { font-size: 18px; font-weight: 700; }
-.cbtn { padding: 8px 16px; background: rgba(255,59,48,.18); color: #ff3b30; border: 1px solid rgba(255,59,48,.25); border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 13px; }
-.cbtn:hover { background: rgba(255,59,48,.3); }
-.pwrap { position: relative; padding-bottom: 56.25%; height: 0; background: #000; border-radius: 12px; overflow: hidden; }
-video, iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: none; background: #000; }
-.ov { position: absolute; inset: 0; z-index: 5; pointer-events: none; }
-/* Loading overlay on video */
-.vload { position: absolute; inset: 0; z-index: 20; background: rgba(0,0,0,.7); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; transition: opacity .3s; }
-.vload.gone { opacity: 0; pointer-events: none; }
-.vload-spin { width: 44px; height: 44px; border: 3px solid rgba(255,255,255,.15); border-top-color: #667eea; border-radius: 50%; animation: sp 1s linear infinite; }
-.vload-txt { font-size: 13px; color: rgba(255,255,255,.6); }
-@keyframes sp { to { transform: rotate(360deg); } }
-/* Buffer bar */
-.bwrap { margin-top: 8px; height: 4px; background: rgba(255,255,255,.08); border-radius: 3px; overflow: hidden; display: none; }
-.bbar { height: 100%; width: 0%; background: linear-gradient(90deg, #667eea, #764ba2); border-radius: 3px; transition: width .5s ease; }
-.binfo { margin-top: 5px; font-size: 11px; color: rgba(255,255,255,.35); display: flex; justify-content: space-between; }
-/* Status text */
-#statusLine { font-size: 12px; color: rgba(255,255,255,.4); margin-top: 8px; min-height: 18px; }
-#loadSec { display: none; text-align: center; padding: 48px; color: rgba(255,255,255,.5); }
-.lspin { width: 44px; height: 44px; border: 3px solid rgba(255,255,255,.1); border-top-color: #667eea; border-radius: 50%; animation: sp 1s linear infinite; margin: 0 auto 14px; }
-* { -webkit-user-select: none; -moz-user-select: none; user-select: none; }
-input[type=url] { -webkit-user-select: text; -moz-user-select: text; user-select: text; }
-video, img, iframe { -webkit-user-drag: none; user-drag: none; }
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#0a0a0a;color:#fff;min-height:100vh}
+.hdr{background:linear-gradient(135deg,#1a1a2e,#16213e);padding:18px 24px;box-shadow:0 2px 20px rgba(0,0,0,.5)}
+.hdr-in{max-width:1200px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px}
+.logo{font-size:24px;font-weight:700;background:linear-gradient(135deg,#667eea,#764ba2);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.badge{background:rgba(76,175,80,.2);color:#4caf50;padding:5px 12px;border-radius:20px;font-size:12px;font-weight:600}
+.wrap{max-width:1200px;margin:0 auto;padding:32px 20px}
+.card{background:linear-gradient(135deg,#1a1a2e,#16213e);border-radius:16px;padding:32px;margin-bottom:24px;box-shadow:0 8px 32px rgba(0,0,0,.3)}
+.card-title{font-size:20px;font-weight:700;margin-bottom:16px;background:linear-gradient(135deg,#667eea,#764ba2);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+input[type=url]{width:100%;padding:14px 16px;background:rgba(255,255,255,.06);border:2px solid rgba(255,255,255,.1);border-radius:10px;color:#fff;font-size:15px;margin-bottom:16px;transition:border-color .2s}
+input:focus{outline:none;border-color:#667eea}
+input::placeholder{color:rgba(255,255,255,.35)}
+.btn{padding:14px 36px;background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:600;cursor:pointer;transition:transform .15s,opacity .15s}
+.btn:hover:not(:disabled){transform:translateY(-2px)}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.sbadge{display:inline-block;margin-top:12px;background:rgba(76,175,80,.12);color:#4caf50;border:1px solid rgba(76,175,80,.28);padding:6px 12px;border-radius:6px;font-size:11px}
+.err{background:rgba(244,67,54,.14);border:1px solid rgba(244,67,54,.3);color:#f44336;padding:12px 16px;border-radius:10px;margin-top:12px;display:none;line-height:1.6}
+#vSec{display:none}
+#vSec.on{display:block}
+.ph{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;flex-wrap:wrap;gap:10px}
+.ptitle{font-size:18px;font-weight:700}
+.cbtn{padding:8px 16px;background:rgba(255,59,48,.18);color:#ff3b30;border:1px solid rgba(255,59,48,.25);border-radius:8px;cursor:pointer;font-weight:600;font-size:13px}
+.cbtn:hover{background:rgba(255,59,48,.3)}
+.pwrap{position:relative;padding-bottom:56.25%;height:0;background:#000;border-radius:12px;overflow:hidden}
+video,iframe{position:absolute;inset:0;width:100%;height:100%;border:none;background:#000}
+.ov{position:absolute;inset:0;z-index:5;pointer-events:none}
+.vload{position:absolute;inset:0;z-index:20;background:rgba(0,0,0,.75);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;transition:opacity .3s}
+.vload.gone{opacity:0;pointer-events:none}
+.spin{width:46px;height:46px;border:3px solid rgba(255,255,255,.15);border-top-color:#667eea;border-radius:50%;animation:sp 1s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+.vload-txt{font-size:13px;color:rgba(255,255,255,.65);text-align:center;padding:0 20px}
+.bwrap{margin-top:8px;height:5px;background:rgba(255,255,255,.08);border-radius:3px;overflow:hidden;display:none}
+.bbar{height:100%;width:0%;background:linear-gradient(90deg,#667eea,#764ba2);border-radius:3px;transition:width .6s ease}
+.binfo{margin-top:6px;font-size:11px;color:rgba(255,255,255,.35);display:none;justify-content:space-between}
+#st{font-size:11px;color:rgba(255,255,255,.35);margin-top:6px;min-height:16px}
+#loadSec{display:none;text-align:center;padding:48px;color:rgba(255,255,255,.5)}
+.lspin{width:44px;height:44px;border:3px solid rgba(255,255,255,.1);border-top-color:#667eea;border-radius:50%;animation:sp 1s linear infinite;margin:0 auto 14px}
+*{-webkit-user-select:none;-moz-user-select:none;user-select:none}
+input[type=url]{-webkit-user-select:text;-moz-user-select:text;user-select:text}
+video,img,iframe{-webkit-user-drag:none;user-drag:none}
+@media(max-width:600px){.card{padding:20px}.logo{font-size:20px}}
 </style>
 </head>
 <body>
-
 <div class="hdr">
   <div class="hdr-in">
     <div class="logo">🎬 Video Player Pro</div>
     <div class="badge">🔒 Protected</div>
   </div>
 </div>
-
 <div class="wrap">
   <div class="card">
     <div class="card-title">Load Secure Video</div>
     <input type="url" id="urlIn" placeholder="Paste Platform B video URL… e.g. https://platform-b.vercel.app/video/abc123">
     <button class="btn" id="loadBtn">▶ Load Video</button>
-    <div class="sbadge">🛡 blob:// URL — IDM cannot detect stream · Token sent as header only</div>
+    <div class="sbadge">🛡 blob:// URL · Token in header only · IDM blocked</div>
     <div class="err" id="errBox"></div>
   </div>
-
   <div id="loadSec"><div class="lspin"></div><p>Connecting…</p></div>
-
   <div id="vSec" class="card">
     <div class="ph">
       <div class="ptitle">Now Playing</div>
@@ -85,417 +81,357 @@ video, img, iframe { -webkit-user-drag: none; user-drag: none; }
     <div class="pwrap">
       <video id="vid" controls playsinline
              controlsList="nodownload nofullscreen noremoteplayback"
-             disablePictureInPicture
-             oncontextmenu="return false;"></video>
+             disablePictureInPicture oncontextmenu="return false;"></video>
       <iframe id="ifr" allowfullscreen allow="autoplay" style="display:none" oncontextmenu="return false;"></iframe>
       <div class="ov" oncontextmenu="return false;"></div>
       <div class="vload" id="vload">
-        <div class="vload-spin"></div>
-        <div class="vload-txt" id="vloadTxt">Buffering…</div>
+        <div class="spin"></div>
+        <div class="vload-txt" id="vloadTxt">Connecting…</div>
       </div>
     </div>
     <div class="bwrap" id="bWrap"><div class="bbar" id="bBar"></div></div>
-    <div class="binfo" id="bInfo" style="display:none">
-      <span id="bLeft">Loading…</span>
-      <span id="bRight"></span>
-    </div>
-    <div id="statusLine"></div>
+    <div class="binfo" id="bInfo"><span id="bL">Loading…</span><span id="bR"></span></div>
+    <div id="st"></div>
   </div>
 </div>
-
 <script>
 'use strict';
-// ═══════════════════════════════════════════════════════════
-// CONFIG
-// ═══════════════════════════════════════════════════════════
-const SEC = '84418779257393762955868022673598';
+// ═══════════════════════════════════════════════════════════════
+//  CONFIG
+// ═══════════════════════════════════════════════════════════════
+const SEC          = '84418779257393762955868022673598';
+const CHUNK_BYTES  = 4 * 1024 * 1024;   // 4MB fetch chunks
+const AHEAD_STOP   = 90;                 // pause pump when 90s ahead
+const AHEAD_GO     = 20;                 // resume pump when < 20s ahead
+const INITIAL_S    = 3;                  // play after 3s buffered
+const EVICT_S      = 60;                 // evict data > 60s behind playhead
+const MAX_RETRIES  = 4;
+const FETCH_TO_MS  = 20000;
 
-// Fetch chunk size: 2MB — small enough for fast initial load,
-// large enough to avoid too many round-trips on a 1hr video (~750MB)
-const CHUNK_SIZE      = 2 * 1024 * 1024;   // 2 MB per fetch
-const AHEAD_PAUSE_S   = 120;               // pause fetching when 2min buffered ahead
-const AHEAD_RESUME_S  = 30;                // resume when it drops to 30s ahead
-const INITIAL_PLAY_S  = 4;                 // start playback after 4s buffered
-const EVICT_BEHIND_S  = 90;               // keep 90s behind playhead (for back-seeks)
-const FETCH_RETRIES   = 4;
-const FETCH_TIMEOUT   = 25000;
+// ═══════════════════════════════════════════════════════════════
+//  STATE
+// ═══════════════════════════════════════════════════════════════
+let _vid, _ms, _sb, _mp4box;
+let _token, _endpoint;
+let _totalBytes = 0, _fetched = 0;
+let _stopped = false, _started = false, _done = false;
+let _pumping = false, _paused = false;
+let _blobUrl = null;
+let _sbQueue = Promise.resolve(); // serialise all SB operations
 
-// ═══════════════════════════════════════════════════════════
-// STATE
-// ═══════════════════════════════════════════════════════════
-let _vid        = null;
-let _ms         = null;
-let _sb         = null;
-let _token      = null;
-let _endpoint   = null;
-let _stopped    = false;
-let _started    = false;    // playback started?
-let _totalSize  = 0;
-let _fetchedTo  = 0;        // bytes appended so far
-let _pumping    = false;
-let _paused     = false;    // pump paused (buffer full)?
-let _done       = false;    // all bytes fetched?
-let _sbUpdating = false;    // are we currently inside an sb operation?
-let _blobUrl    = null;
-
-// ═══════════════════════════════════════════════════════════
-// UTILS
-// ═══════════════════════════════════════════════════════════
-const norm  = u => u.replace(/([^:])\\/\\/+/g, '$1/');
+// ═══════════════════════════════════════════════════════════════
+//  UTILS
+// ═══════════════════════════════════════════════════════════════
+const norm  = u => u.replace(/([^:])\\/\\/+/g,'$1/');
 const sleep = ms => new Promise(r => setTimeout(r, ms));
+const setSt = msg => { const e = document.getElementById('st'); if(e) e.textContent = msg; };
+const setOverlay = (on, msg) => {
+  const e = document.getElementById('vload');
+  const t = document.getElementById('vloadTxt');
+  if(!e) return;
+  e.classList.toggle('gone', !on);
+  if(on && msg && t) t.textContent = msg;
+};
 
-function setStatus(msg) {
-  const el = document.getElementById('statusLine');
-  if (el) el.textContent = msg;
-}
-
-function setLoadOverlay(on, msg) {
-  const el  = document.getElementById('vload');
-  const txt = document.getElementById('vloadTxt');
-  if (!el) return;
-  if (on) { el.classList.remove('gone'); if (txt && msg) txt.textContent = msg; }
-  else    { el.classList.add('gone'); }
-}
-
-function updateBar() {
-  if (!_totalSize) return;
-  const pct    = Math.min(100, (_fetchedTo / _totalSize) * 100);
-  const barEl  = document.getElementById('bBar');
-  const leftEl = document.getElementById('bLeft');
-  const rgtEl  = document.getElementById('bRight');
-  if (barEl)  barEl.style.width = pct.toFixed(1) + '%';
-  if (leftEl) leftEl.textContent = _done ? 'Fully loaded ✓' : \`Loaded \${pct.toFixed(0)}%\`;
-  if (_vid && rgtEl) {
-    const ahead = getAhead();
-    rgtEl.textContent = ahead > 0 ? \`\${Math.round(ahead)}s ahead\` : '';
-  }
-}
-
-// ═══════════════════════════════════════════════════════════
-// BUFFER INSPECTION
-// ═══════════════════════════════════════════════════════════
 function getAhead() {
-  if (!_vid || !_vid.buffered || !_vid.buffered.length) return 0;
+  if(!_vid||!_vid.buffered||!_vid.buffered.length) return 0;
   const ct = _vid.currentTime;
-  for (let i = 0; i < _vid.buffered.length; i++) {
-    if (_vid.buffered.start(i) <= ct + 0.5 && _vid.buffered.end(i) > ct)
-      return _vid.buffered.end(i) - ct;
-  }
+  for(let i=0;i<_vid.buffered.length;i++)
+    if(_vid.buffered.start(i)<=ct+0.5 && _vid.buffered.end(i)>ct)
+      return _vid.buffered.end(i)-ct;
   return 0;
 }
 
-// ═══════════════════════════════════════════════════════════
-// SOURCEBUFFER OPERATIONS
-// We never call appendBuffer/remove while _sb.updating is true.
-// All ops go through waitIdle() first.
-// ═══════════════════════════════════════════════════════════
-function waitSBIdle() {
-  return new Promise((resolve, reject) => {
-    if (!_sb || !_ms || _ms.readyState !== 'open') { resolve(); return; }
-    if (!_sb.updating) { resolve(); return; }
-    const onEnd = () => { _sb.removeEventListener('error', onErr); resolve(); };
-    const onErr = (e) => { _sb.removeEventListener('updateend', onEnd); reject(e); };
-    _sb.addEventListener('updateend', onEnd, { once: true });
-    _sb.addEventListener('error',     onErr, { once: true });
-  });
+function updateBar() {
+  if(!_totalBytes) return;
+  const pct = Math.min(100,(_fetched/_totalBytes)*100);
+  const b = document.getElementById('bBar');
+  const l = document.getElementById('bL');
+  const r = document.getElementById('bR');
+  if(b) b.style.width = pct.toFixed(1)+'%';
+  if(l) l.textContent = _done ? 'Fully loaded ✓' : \`Loaded \${pct.toFixed(0)}%\`;
+  if(r) r.textContent = getAhead()>0 ? \`\${Math.round(getAhead())}s ahead\` : '';
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  SOURCEBUFFER — serialised via promise chain
+//  Never touches SB while it's updating. All ops queued.
+// ═══════════════════════════════════════════════════════════════
+function sbOp(fn) {
+  _sbQueue = _sbQueue.then(() => new Promise((ok, fail) => {
+    if(_stopped || !_sb || !_ms || _ms.readyState !== 'open') { ok(); return; }
+    if(_sb.updating) {
+      // wait for current op to finish
+      _sb.addEventListener('updateend', () => doIt(ok, fail), {once:true});
+    } else {
+      doIt(ok, fail);
+    }
+    function doIt(ok, fail) {
+      if(_stopped || !_sb || _ms.readyState !== 'open') { ok(); return; }
+      _sb.addEventListener('updateend', ok,   {once:true});
+      _sb.addEventListener('error',     fail, {once:true});
+      try { fn(); } catch(e) { _sb.removeEventListener('updateend', ok); fail(e); }
+    }
+  }));
+  return _sbQueue;
 }
 
 async function sbAppend(buf) {
-  if (_stopped || !_sb || !_ms || _ms.readyState !== 'open') return false;
+  if(_stopped) return;
+  let retried = false;
   try {
-    await waitSBIdle();
-    if (_stopped || _ms.readyState !== 'open') return false;
-    await new Promise((resolve, reject) => {
-      const onEnd = () => { _sb.removeEventListener('error', onErr); resolve(); };
-      const onErr = e  => { _sb.removeEventListener('updateend', onEnd); reject(e); };
-      _sb.addEventListener('updateend', onEnd, { once: true });
-      _sb.addEventListener('error',     onErr, { once: true });
-      _sb.appendBuffer(buf);
-    });
-    return true;
-  } catch (e) {
-    if (e && e.name === 'QuotaExceededError') {
-      await doEvict(true);
-      try {
-        await waitSBIdle();
-        if (_stopped || _ms.readyState !== 'open') return false;
-        await new Promise((resolve, reject) => {
-          const onEnd = () => { _sb.removeEventListener('error', onErr); resolve(); };
-          const onErr = e  => { _sb.removeEventListener('updateend', onEnd); reject(e); };
-          _sb.addEventListener('updateend', onEnd, { once: true });
-          _sb.addEventListener('error',     onErr, { once: true });
-          _sb.appendBuffer(buf);
-        });
-        return true;
-      } catch (_) { return false; }
+    await sbOp(() => _sb.appendBuffer(buf));
+  } catch(e) {
+    if(e && e.name === 'QuotaExceededError' && !retried) {
+      retried = true;
+      await sbEvict(true);
+      await sbOp(() => _sb.appendBuffer(buf));
     }
-    return false;
   }
 }
 
-async function doEvict(aggressive) {
-  if (!_sb || !_vid || !_ms || _ms.readyState !== 'open') return;
-  await waitSBIdle();
-  if (_ms.readyState !== 'open' || _stopped) return;
-  const ct    = _vid.currentTime;
-  const evict = aggressive ? Math.max(0, ct - 10) : Math.max(0, ct - EVICT_BEHIND_S);
-  if (evict <= 0.1) return;
-  try {
-    await new Promise((resolve, reject) => {
-      const onEnd = () => { _sb.removeEventListener('error', onErr); resolve(); };
-      const onErr = e  => { _sb.removeEventListener('updateend', onEnd); reject(e); };
-      _sb.addEventListener('updateend', onEnd, { once: true });
-      _sb.addEventListener('error',     onErr, { once: true });
-      _sb.remove(0, evict);
-    });
-  } catch (_) {}
+function sbEvict(force) {
+  const ct = _vid ? _vid.currentTime : 0;
+  const to = force ? Math.max(0,ct-5) : Math.max(0,ct-EVICT_S);
+  if(to < 0.5) return Promise.resolve();
+  return sbOp(() => _sb.remove(0, to));
 }
 
-// ═══════════════════════════════════════════════════════════
-// FETCH ONE CHUNK
-// ═══════════════════════════════════════════════════════════
-async function fetchChunk(startByte, retryCount = 0) {
-  const endByte = startByte + CHUNK_SIZE - 1;
-  const ctrl    = new AbortController();
-  const timer   = setTimeout(() => ctrl.abort(), FETCH_TIMEOUT);
+// ═══════════════════════════════════════════════════════════════
+//  MP4BOX INTEGRATION
+//  mp4box.js reads the raw bytes we feed it, detects the moov,
+//  then re-segments the movie data into proper fMP4 segments.
+//  We feed those segments directly into the MSE SourceBuffer.
+// ═══════════════════════════════════════════════════════════════
+function initMp4Box() {
+  _mp4box = MP4Box.createFile();
+
+  _mp4box.onError = e => {
+    setSt('⚠ MP4 parse error: ' + e);
+  };
+
+  // Called once the moov (movie header) has been fully parsed
+  _mp4box.onReady = info => {
+    setSt('Video info parsed — setting up tracks…');
+
+    // Set up segmentation: 2-second segments
+    const tracks = info.videoTracks.concat(info.audioTracks);
+    if(!tracks.length) { setSt('⚠ No tracks found'); return; }
+
+    tracks.forEach(track => {
+      _mp4box.setSegmentOptions(track.id, null, { nbSamples: 60 });
+    });
+
+    // Get the fMP4 init segment (contains moov with mvex — required by MSE)
+    const initSegs = _mp4box.initializeSegmentation();
+
+    // For each track, add a SourceBuffer and append the init segment
+    initSegs.forEach(seg => {
+      // Find a supported MIME type for this track
+      const mime = getMime(seg.track);
+      if(!mime) return;
+
+      try {
+        if(!_sb) {
+          // Use the first SourceBuffer (video track preferred)
+          _sb = _ms.addSourceBuffer(mime);
+          _sb.mode = 'segments'; // fMP4 from mp4box — segments mode works now!
+        }
+      } catch(e) {
+        setSt('⚠ addSourceBuffer failed: ' + e.message);
+        return;
+      }
+
+      // Append init segment
+      sbOp(() => _sb.appendBuffer(seg.buffer));
+    });
+
+    // Start generating segments
+    _mp4box.start();
+  };
+
+  // Called whenever a segment is ready
+  _mp4box.onSegment = (id, user, buffer, sampleNum, isLast) => {
+    if(_stopped) return;
+    // Append the fMP4 segment to the SourceBuffer
+    sbAppend(buffer).then(() => {
+      if(!_started && getAhead() >= INITIAL_S) {
+        _started = true;
+        setOverlay(false);
+        setSt('Playing');
+        _vid.play().catch(() => setSt('Click ▶ to play'));
+      }
+      updateBar();
+      if(isLast || _done) {
+        sbOp(() => {}).then(() => {
+          if(_ms && _ms.readyState === 'open') {
+            try { _ms.endOfStream(); } catch(_){}
+          }
+          setSt('Fully loaded ✓');
+          updateBar();
+        });
+      }
+    });
+  };
+}
+
+function getMime(track) {
+  if(!track) return 'video/mp4';
+  const codec = track.codec || '';
+  if(track.type === 'video' || track.video) {
+    if(MediaSource.isTypeSupported(\`video/mp4; codecs="\${codec}"\`))
+      return \`video/mp4; codecs="\${codec}"\`;
+    return MediaSource.isTypeSupported('video/mp4') ? 'video/mp4' : null;
+  }
+  if(track.type === 'audio' || track.audio) {
+    if(MediaSource.isTypeSupported(\`audio/mp4; codecs="\${codec}"\`))
+      return \`audio/mp4; codecs="\${codec}"\`;
+    return MediaSource.isTypeSupported('audio/mp4') ? 'audio/mp4' : null;
+  }
+  return 'video/mp4';
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  FETCH PUMP
+//  Downloads the MP4 in 4MB chunks, feeds raw bytes to mp4box.
+//  mp4box converts them to fMP4 segments → MSE → video plays.
+// ═══════════════════════════════════════════════════════════════
+async function fetchChunk(start, retry = 0) {
+  const end  = start + CHUNK_BYTES - 1;
+  const ctrl = new AbortController();
+  const tm   = setTimeout(() => ctrl.abort(), FETCH_TO_MS);
   try {
     const res = await fetch(_endpoint, {
       headers: {
         'X-Session-Token': _token,
-        'Range':           \`bytes=\${startByte}-\${endByte}\`,
-        'Origin':          location.origin,
+        'Range': \`bytes=\${start}-\${end}\`,
+        'Origin': location.origin,
       },
       signal: ctrl.signal,
     });
-    clearTimeout(timer);
-
-    if (res.status === 416) {
-      // Requested range is beyond end of file — we're done
-      return { buf: null, eof: true };
-    }
-    if (!res.ok && res.status !== 206) {
-      throw new Error(\`HTTP \${res.status}\`);
-    }
-
-    // Grab total file size from Content-Range if available
-    const cr = res.headers.get('content-range') || '';
+    clearTimeout(tm);
+    if(res.status === 416) return {buf:null, eof:true};
+    if(!res.ok && res.status !== 206) throw new Error('HTTP '+res.status);
+    const cr = res.headers.get('content-range')||'';
     const m  = cr.match(/\\/(\\d+)$/);
-    if (m && !_totalSize) {
-      _totalSize = parseInt(m[1], 10);
+    if(m && !_totalBytes) {
+      _totalBytes = parseInt(m[1],10);
       document.getElementById('bWrap').style.display = 'block';
       document.getElementById('bInfo').style.display = 'flex';
     }
-
     const buf = await res.arrayBuffer();
-    const eof = _totalSize > 0 && (startByte + buf.byteLength) >= _totalSize;
-    return { buf, eof };
-
-  } catch (e) {
-    clearTimeout(timer);
-    if (retryCount < FETCH_RETRIES) {
-      await sleep(Math.min(800 * (retryCount + 1), 4000));
-      return fetchChunk(startByte, retryCount + 1);
-    }
+    return {buf, eof: _totalBytes>0 && start+buf.byteLength >= _totalBytes};
+  } catch(e) {
+    clearTimeout(tm);
+    if(retry < MAX_RETRIES) { await sleep(Math.min(1000*(retry+1),5000)); return fetchChunk(start,retry+1); }
     throw e;
   }
 }
 
-// ═══════════════════════════════════════════════════════════
-// THE PUMP
-// Fetches chunks sequentially, appends to SourceBuffer in order.
-// Uses 'sequence' mode — the browser assigns timestamps automatically.
-// This works perfectly with regular (non-fragmented) MP4 files.
-// ═══════════════════════════════════════════════════════════
 async function runPump() {
-  if (_pumping || _stopped || _done) return;
+  if(_pumping || _stopped || _done) return;
   _pumping = true;
   _paused  = false;
 
   try {
-    while (!_stopped && !_done) {
-
-      // ── Check if we should pause (buffer is very healthy) ──────────
-      const ahead = getAhead();
-      if (_started && ahead >= AHEAD_PAUSE_S) {
+    while(!_stopped && !_done) {
+      // Pause if very healthy buffer
+      if(_started && getAhead() >= AHEAD_STOP) {
         _paused  = true;
         _pumping = false;
-        setStatus(\`Buffer full (\${Math.round(ahead)}s ahead) — paused\`);
-        return; // pump will be restarted by the resume-check interval
-      }
-
-      // ── Periodic eviction ─────────────────────────────────────────
-      if (_fetchedTo > 0 && _fetchedTo % (CHUNK_SIZE * 15) === 0) {
-        await doEvict(false);
-      }
-
-      // ── Fetch next chunk ──────────────────────────────────────────
-      let result;
-      try {
-        result = await fetchChunk(_fetchedTo);
-      } catch (e) {
-        // All retries failed — stop and show error
-        setStatus('⚠ Network error — try refreshing or seeking to resume');
-        _pumping = false;
+        setSt(\`Buffered \${Math.round(getAhead())}s — paused\`);
         return;
       }
 
-      if (_stopped) break;
+      // Periodic eviction
+      if(_fetched > 0 && _fetched % (CHUNK_BYTES*20) === 0) sbEvict(false);
 
-      // ── Append to SourceBuffer ────────────────────────────────────
-      if (result.buf && result.buf.byteLength > 0) {
-        const ok = await sbAppend(result.buf);
-        if (!ok) {
-          // Append failed (e.g. MS closed after seek) — stop
-          _pumping = false;
-          return;
-        }
-        _fetchedTo += result.buf.byteLength;
+      let res;
+      try { res = await fetchChunk(_fetched); }
+      catch(e) { setSt('⚠ Network error — will retry on seek/wait'); _pumping=false; return; }
+      if(_stopped) break;
+
+      if(res.buf && res.buf.byteLength > 0) {
+        // Feed raw bytes into mp4box — it handles fragmentation
+        const ab = res.buf;
+        ab.fileStart = _fetched;   // mp4box needs to know the byte offset
+        _fetched += ab.byteLength;
+        _mp4box.appendBuffer(ab); // mp4box will fire onSegment with fMP4 data
         updateBar();
-
-        // ── Start playback once enough is buffered ─────────────────
-        if (!_started && getAhead() >= INITIAL_PLAY_S) {
-          _started = true;
-          setLoadOverlay(false);
-          setStatus('Playing');
-          _vid.play().catch(e => {
-            // Autoplay might be blocked — show play button instead
-            setStatus('Click ▶ to play');
-          });
-        }
       }
 
-      // ── Done? ─────────────────────────────────────────────────────
-      if (result.eof) {
+      if(res.eof) {
         _done = true;
-        if (_ms && _ms.readyState === 'open') {
-          await waitSBIdle();
-          try { _ms.endOfStream(); } catch (_) {}
-        }
-        setStatus('Fully loaded ✓');
-        updateBar();
+        _mp4box.flush(); // tell mp4box no more data
         break;
       }
     }
-  } catch (e) {
-    // Unexpected error
-    setStatus('⚠ Stream error');
-  }
-
+  } catch(e) { setSt('⚠ Stream error'); }
   _pumping = false;
 }
 
-// Resume-check: if pump is paused because buffer is full, restart it when drained
 function startResumeCheck() {
   const iv = setInterval(() => {
-    if (_stopped || _done) { clearInterval(iv); return; }
-    if (!_paused) { clearInterval(iv); return; }
-    const ahead = getAhead();
-    if (ahead < AHEAD_RESUME_S) {
-      _paused = false;
-      clearInterval(iv);
-      runPump();
-    }
-    setStatus(\`Buffered \${Math.round(ahead)}s ahead — paused\`);
+    if(_stopped || _done) { clearInterval(iv); return; }
+    if(!_paused) { clearInterval(iv); return; }
+    if(getAhead() < AHEAD_GO) { _paused = false; clearInterval(iv); runPump(); }
   }, 1500);
 }
 
-// ═══════════════════════════════════════════════════════════
-// INIT MSE + START STREAMING
-// ═══════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════
+//  MAIN INIT
+// ═══════════════════════════════════════════════════════════════
 async function startStream(endpoint, token) {
-  _endpoint  = endpoint;
-  _token     = token;
-  _stopped   = false;
-  _started   = false;
-  _done      = false;
-  _fetchedTo = 0;
-  _totalSize = 0;
-  _pumping   = false;
-  _paused    = false;
-  _blobUrl   = null;
+  _endpoint = endpoint; _token = token;
+  _stopped = _started = _done = _pumping = _paused = false;
+  _fetched = _totalBytes = 0;
+  _sb = null; _mp4box = null;
+  _sbQueue = Promise.resolve();
 
-  setLoadOverlay(true, 'Connecting…');
-  setStatus('');
+  setOverlay(true, 'Initialising player…');
 
-  // Create MediaSource
+  // Create MediaSource + blob URL
   _ms = new MediaSource();
   _blobUrl = URL.createObjectURL(_ms);
+  _vid.src = _blobUrl; // IDM sees blob:// — nothing to intercept
 
-  // Assign blob URL to video — IDM sees NOTHING interceptable
-  _vid.src = _blobUrl;
-
-  // Wait for MediaSource to open
-  await new Promise((resolve, reject) => {
-    _ms.addEventListener('sourceopen', resolve, { once: true });
-    _ms.addEventListener('error',      reject,  { once: true });
+  await new Promise((res, rej) => {
+    _ms.addEventListener('sourceopen', res,  {once:true});
+    _ms.addEventListener('error',      rej,  {once:true});
   });
 
-  // Detect supported MIME type
-  // Order matters: try the most specific first for best compatibility
-  const MIME_CANDIDATES = [
-    'video/mp4; codecs="avc1.42E01E, mp4a.40.2"',
-    'video/mp4; codecs="avc1.640028, mp4a.40.2"',
-    'video/mp4; codecs="avc1.64001f, mp4a.40.2"',
-    'video/mp4; codecs="avc1.4d401f, mp4a.40.2"',
-    'video/mp4; codecs="mp4a.40.2"',
-    'video/mp4',
-  ];
-  const mime = MIME_CANDIDATES.find(m => MediaSource.isTypeSupported(m));
-  if (!mime) throw new Error('Browser does not support MP4 MediaSource. Use Chrome or Edge.');
+  setOverlay(true, 'Loading video…');
 
-  // Add SourceBuffer in SEQUENCE mode.
-  // WHY SEQUENCE NOT SEGMENTS:
-  //   - Regular MP4 files (from Dropbox, Google Drive etc.) are NOT fragmented (fMP4).
-  //   - 'segments' mode requires fragmented MP4 with proper moof/mdat boxes and timestamps.
-  //   - 'sequence' mode assigns timestamps automatically based on append order — works with any MP4.
-  //   - Seeking works because the browser tracks how much data it has received and the video
-  //     element fires seeking/waiting events when the user scrubs to an unbuffered position.
-  _sb = _ms.addSourceBuffer(mime);
-  _sb.mode = 'sequence';
+  // Init mp4box
+  initMp4Box();
 
-  // Wire events
-  _vid.addEventListener('waiting',    onWaiting);
-  _vid.addEventListener('timeupdate', onTimeUpdate);
-  _vid.addEventListener('playing',    onPlaying);
-  _vid.addEventListener('canplay',    onCanPlay);
-  _vid.addEventListener('error',      onVidError);
+  // Wire video events
+  _vid.addEventListener('waiting',    onWait);
+  _vid.addEventListener('playing',    () => setOverlay(false));
+  _vid.addEventListener('canplay',    () => setOverlay(false));
+  _vid.addEventListener('timeupdate', updateBar);
+  _vid.addEventListener('error',      () => {
+    const e = _vid.error;
+    setSt('⚠ '+( e ? e.message : 'video error'));
+  });
 
-  setStatus('Fetching…');
-  setLoadOverlay(true, 'Loading video…');
-
-  // Start the pump
+  // Start fetching
+  setSt('Fetching…');
   runPump();
-
-  // Start resume-check for when buffer fills up
   startResumeCheck();
 }
 
-function onWaiting() {
-  if (!_done) {
-    setLoadOverlay(true, 'Buffering…');
-    // If pump stopped, restart it
-    if (!_pumping && !_paused && !_stopped && !_done) {
-      runPump();
-    }
-    // If paused (buffer was full), force-resume regardless
-    if (_paused) {
-      _paused = false;
-      runPump();
-    }
+function onWait() {
+  setOverlay(true, 'Buffering…');
+  if(!_pumping && !_stopped) {
+    _paused = false;
+    runPump();
   }
 }
 
-function onPlaying()    { setLoadOverlay(false); }
-function onCanPlay()    { setLoadOverlay(false); }
-function onTimeUpdate() { updateBar(); }
-function onVidError()   {
-  const e = _vid.error;
-  setStatus(\`⚠ Video error: \${e ? e.message : 'unknown'}\`);
-}
-
-// ═══════════════════════════════════════════════════════════
-// LOAD VIDEO — fetches metadata, initialises stream
-// ═══════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════
+//  LOAD / CLOSE
+// ═══════════════════════════════════════════════════════════════
 async function loadVideo() {
   const url   = document.getElementById('urlIn').value.trim();
   const btn   = document.getElementById('loadBtn');
@@ -506,11 +442,9 @@ async function loadVideo() {
   const errEl = document.getElementById('errBox');
 
   errEl.style.display = 'none';
-
-  if (!url || !url.includes('/video/')) {
+  if(!url || !url.includes('/video/')) {
     errEl.textContent = '❌ Invalid URL — must contain /video/';
-    errEl.style.display = 'block';
-    return;
+    errEl.style.display = 'block'; return;
   }
 
   vSec.classList.remove('on');
@@ -519,161 +453,105 @@ async function loadVideo() {
 
   try {
     const m = url.match(/\\/video\\/([^/?#]+)/);
-    if (!m) throw new Error('Cannot extract video ID from URL');
+    if(!m) throw new Error('Cannot extract video ID from URL');
     const videoId = m[1];
     const base    = url.slice(0, url.indexOf('/video/'));
-    const apiUrl  = norm(base + '/api/video/' + videoId);
 
-    const res = await fetch(apiUrl, {
-      headers: { 'X-Security-String': SEC, 'Accept': 'application/json' },
+    const res = await fetch(norm(base+'/api/video/'+videoId), {
+      headers:{'X-Security-String':SEC, 'Accept':'application/json'}
     });
-
-    if (res.status === 403) throw new Error('Access denied — check your security key');
-    if (res.status === 404) throw new Error('Video not found');
-    if (!res.ok)            throw new Error('Server error: ' + res.status);
-
+    if(res.status===403) throw new Error('Access denied — wrong security key');
+    if(res.status===404) throw new Error('Video not found');
+    if(!res.ok) throw new Error('Server error: '+res.status);
     const data = await res.json();
-    if (!data.success) throw new Error(data.message || 'Failed to load video');
+    if(!data.success) throw new Error(data.message||'Failed to load');
 
     load.style.display = 'none';
     vSec.classList.add('on');
     btn.disabled = false;
 
-    // Reset bar
     document.getElementById('bWrap').style.display = 'none';
     document.getElementById('bInfo').style.display = 'none';
     document.getElementById('bBar').style.width = '0%';
+    document.getElementById('st').textContent = '';
 
-    if (data.type === 'embed') {
-      // YouTube / Vimeo / Dailymotion
-      ifr.src = norm(data.proxyUrl) + '?key=' + encodeURIComponent(SEC);
+    if(data.type === 'embed') {
+      ifr.src = norm(data.proxyUrl)+'?key='+encodeURIComponent(SEC);
       ifr.style.display = 'block';
       _vid.style.display = 'none';
-      setLoadOverlay(false);
+      setOverlay(false);
     } else {
-      // Direct video — MSE stream
       _vid.style.display = 'block';
       ifr.style.display  = 'none';
       ifr.src = '';
-
-      if (!data.sessionToken)   throw new Error('No session token — please redeploy Platform B');
-      if (!data.streamEndpoint) throw new Error('No stream endpoint — please redeploy Platform B');
-      if (typeof MediaSource === 'undefined') {
+      if(!data.sessionToken)   throw new Error('No session token — redeploy Platform B');
+      if(!data.streamEndpoint) throw new Error('No stream endpoint — redeploy Platform B');
+      if(typeof MediaSource === 'undefined')
         throw new Error('MediaSource not supported. Use Chrome, Edge, or Firefox.');
-      }
-
+      if(typeof MP4Box === 'undefined')
+        throw new Error('mp4box.js failed to load — check internet connection.');
       await startStream(data.streamEndpoint, data.sessionToken);
     }
-
-  } catch (e) {
+  } catch(e) {
     load.style.display = 'none';
     btn.disabled = false;
     errEl.textContent = '❌ ' + e.message;
     errEl.style.display = 'block';
-    setTimeout(() => { errEl.style.display = 'none'; }, 10000);
+    setTimeout(()=>{ errEl.style.display='none'; }, 10000);
   }
 }
 
-// ═══════════════════════════════════════════════════════════
-// CLOSE
-// ═══════════════════════════════════════════════════════════
 function closeVideo() {
-  _stopped = true;
-  _pumping = false;
-  _paused  = false;
-
+  _stopped = _pumping = _paused = true;
   document.getElementById('vSec').classList.remove('on');
   document.getElementById('bWrap').style.display = 'none';
   document.getElementById('bInfo').style.display = 'none';
-  document.getElementById('statusLine').textContent = '';
-  setLoadOverlay(false);
-
-  if (_vid) {
-    _vid.removeEventListener('waiting',    onWaiting);
-    _vid.removeEventListener('timeupdate', onTimeUpdate);
-    _vid.removeEventListener('playing',    onPlaying);
-    _vid.removeEventListener('canplay',    onCanPlay);
-    _vid.removeEventListener('error',      onVidError);
-    _vid.pause();
-    _vid.removeAttribute('src');
-    _vid.load();
+  document.getElementById('st').textContent = '';
+  setOverlay(false);
+  if(_vid) {
+    ['waiting','playing','canplay','timeupdate','error'].forEach(ev =>
+      _vid.removeEventListener(ev, ev==='waiting'?onWait:()=>{}));
+    _vid.pause(); _vid.removeAttribute('src'); _vid.load();
   }
-  if (_blobUrl) { URL.revokeObjectURL(_blobUrl); _blobUrl = null; }
-  if (_ms)      { try { _ms.endOfStream(); } catch (_) {} _ms = null; _sb = null; }
-
+  if(_blobUrl) { URL.revokeObjectURL(_blobUrl); _blobUrl=null; }
+  if(_ms) { try{_ms.endOfStream();}catch(_){} _ms=null; _sb=null; }
+  if(_mp4box) { try{_mp4box.stop();}catch(_){} _mp4box=null; }
   const ifr = document.getElementById('ifr');
-  if (ifr) { ifr.src = ''; ifr.style.display = 'none'; }
+  if(ifr) { ifr.src=''; ifr.style.display='none'; }
 }
 
-// ═══════════════════════════════════════════════════════════
-// EVENTS
-// ═══════════════════════════════════════════════════════════
-document.getElementById('loadBtn') .addEventListener('click',    loadVideo);
-document.getElementById('closeBtn').addEventListener('click',    closeVideo);
-document.getElementById('urlIn')   .addEventListener('keypress', e => { if (e.key === 'Enter') loadVideo(); });
+document.getElementById('loadBtn') .addEventListener('click', loadVideo);
+document.getElementById('closeBtn').addEventListener('click', closeVideo);
+document.getElementById('urlIn')   .addEventListener('keypress', e=>{ if(e.key==='Enter') loadVideo(); });
 
-// ═══════════════════════════════════════════════════════════
-// ANTI-DOWNLOAD PROTECTIONS
-// ═══════════════════════════════════════════════════════════
-document.addEventListener('contextmenu', e => { e.preventDefault(); return false; });
-
-document.addEventListener('keydown', e => {
-  const k = e.key ? e.key.toLowerCase() : '';
-  if ((e.ctrlKey || e.metaKey) && ['s','u','p','i','j','c'].includes(k)) { e.preventDefault(); return false; }
-  if ((e.ctrlKey || e.metaKey) && e.shiftKey && ['i','j','c'].includes(k)) { e.preventDefault(); return false; }
-  if (k === 'f12' || k === 'printscreen') { e.preventDefault(); return false; }
+// ═══════════════════════════════════════════════════════════════
+//  ANTI-DOWNLOAD
+// ═══════════════════════════════════════════════════════════════
+document.addEventListener('contextmenu', e=>{ e.preventDefault(); return false; });
+document.addEventListener('keydown', e=>{
+  const k=(e.key||'').toLowerCase();
+  if((e.ctrlKey||e.metaKey)&&['s','u','p','i','j','c'].includes(k)){e.preventDefault();return false;}
+  if((e.ctrlKey||e.metaKey)&&e.shiftKey&&['i','j','c'].includes(k)){e.preventDefault();return false;}
+  if(k==='f12'||k==='printscreen'){e.preventDefault();return false;}
 });
-
-document.addEventListener('dragstart', e => { e.preventDefault(); return false; });
-
-document.addEventListener('visibilitychange', () => {
-  const v = document.getElementById('vid');
-  if (v && document.hidden) v.pause();
-});
-
-// Block screen capture APIs
-if (navigator.mediaDevices) {
-  try {
-    Object.defineProperty(navigator.mediaDevices, 'getDisplayMedia', {
-      configurable: false, writable: false,
-      value: () => Promise.reject(new DOMException('Not allowed', 'NotAllowedError'))
-    });
-  } catch (_) {}
-  try {
-    const _gum = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
-    Object.defineProperty(navigator.mediaDevices, 'getUserMedia', {
-      configurable: false, writable: false,
-      value: c => (c && c.video)
-        ? Promise.reject(new DOMException('Not allowed', 'NotAllowedError'))
-        : _gum(c)
-    });
-  } catch (_) {}
+document.addEventListener('dragstart', e=>{ e.preventDefault(); return false; });
+document.addEventListener('visibilitychange', ()=>{ const v=document.getElementById('vid'); if(v&&document.hidden) v.pause(); });
+if(navigator.mediaDevices){
+  try{Object.defineProperty(navigator.mediaDevices,'getDisplayMedia',{configurable:false,writable:false,value:()=>Promise.reject(new DOMException('Not allowed','NotAllowedError'))});}catch(_){}
+  try{
+    const _g=navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
+    Object.defineProperty(navigator.mediaDevices,'getUserMedia',{configurable:false,writable:false,value:c=>c&&c.video?Promise.reject(new DOMException('Not allowed','NotAllowedError')):_g(c)});
+  }catch(_){}
 }
-try {
-  Object.defineProperty(window, 'MediaRecorder', {
-    configurable: false, writable: false,
-    value: function() { throw new DOMException('Disabled', 'NotSupportedError'); }
-  });
-} catch (_) {}
-
-// DevTools detection
-(function() {
-  let open = false;
-  setInterval(() => {
-    const isOpen = window.outerWidth  - window.innerWidth  > 160
-                || window.outerHeight - window.innerHeight > 160;
-    const v = document.getElementById('vid');
-    const f = document.getElementById('ifr');
-    if (isOpen && !open) {
-      open = true;
-      if (v) { v.pause(); v.style.visibility = 'hidden'; }
-      if (f) f.style.visibility = 'hidden';
-    } else if (!isOpen && open) {
-      open = false;
-      if (v) v.style.visibility = 'visible';
-      if (f) f.style.visibility = 'visible';
-    }
-  }, 800);
+try{Object.defineProperty(window,'MediaRecorder',{configurable:false,writable:false,value:function(){throw new DOMException('Disabled','NotSupportedError');}});}catch(_){}
+(function(){
+  let open=false;
+  setInterval(()=>{
+    const isOpen=window.outerWidth-window.innerWidth>160||window.outerHeight-window.innerHeight>160;
+    const v=document.getElementById('vid'),f=document.getElementById('ifr');
+    if(isOpen&&!open){open=true;if(v){v.pause();v.style.visibility='hidden';}if(f)f.style.visibility='hidden';}
+    else if(!isOpen&&open){open=false;if(v)v.style.visibility='visible';if(f)f.style.visibility='visible';}
+  },800);
 })();
 </script>
 </body>
