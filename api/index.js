@@ -376,13 +376,10 @@ export default function handler(req, res) {
                         try {
                             await startChunkedStream(chunkUrl, firstChunkToken, streamToken, infoUrl);
                         } catch (mseErr) {
-                            // MSE not supported for this codec — fall back to direct token URL
-                            vid.src = chunkUrl + '?chunk=0&chunkToken=' + encodeURIComponent(firstChunkToken);
-                            vid.load();
+                            throw new Error('Streaming failed. Please use Chrome, Firefox, Edge, or Safari 13+.');
                         }
                     } else {
-                        vid.src = chunkUrl + '?chunk=0&chunkToken=' + encodeURIComponent(firstChunkToken);
-                        vid.load();
+                        throw new Error('Your browser does not support secure streaming. Please use Chrome, Firefox, Edge, or Safari 13+.');
                     }
                 }
             } catch (e) {
