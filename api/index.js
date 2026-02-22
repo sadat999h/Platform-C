@@ -64,7 +64,7 @@ video,img,iframe{-webkit-user-drag:none;user-drag:none}
     <div class="card-title">Load Secure Video</div>
     <input type="url" id="urlIn" placeholder="Paste Platform B video URL… e.g. https://platform-b.vercel.app/video/abc123">
     <button class="btn" id="loadBtn">▶ Load Video</button>
-    <div class="sbadge">🛡 45-second tokens · Strict referer enforcement · UA blocklist</div>
+    <div class="sbadge">🛡 5-minute tokens · Strict referer enforcement · UA blocklist</div>
     <div class="err" id="errBox"></div>
   </div>
 
@@ -76,7 +76,7 @@ video,img,iframe{-webkit-user-drag:none;user-drag:none}
       <button class="cbtn" id="closeBtn">✕ Close</button>
     </div>
     <div class="pwrap">
-      <video id="vid" controls playsinline preload="metadata"
+      <video id="vid" controls playsinline preload="auto"
              controlsList="nodownload nofullscreen noremoteplayback"
              disablePictureInPicture
              oncontextmenu="return false;"></video>
@@ -106,6 +106,7 @@ let _base      = null;
 let _tokTimer  = null;   // setInterval for token countdown
 let _refreshAt = 0;      // timestamp when we should refresh the token
 let _tokEnd    = 0;      // timestamp when current token expires
+let _refreshedUrl = null; // most recent refreshed stream URL
 
 // ─────────────────────────────────────────────
 // HELPERS
@@ -132,7 +133,7 @@ function startTokenCountdown(ttlSeconds) {
   const total  = ttlSeconds * 1000;
 
   _tokEnd     = Date.now() + total;
-  _refreshAt  = _tokEnd - 15000; // refresh 15s before expiry
+  _refreshAt  = _tokEnd - 60000; // refresh 60s before expiry
   wrap.style.display = 'block';
   bar.style.width    = '100%';
 
@@ -154,10 +155,11 @@ function startTokenCountdown(ttlSeconds) {
   }, 500);
 }
 
-// Silently swap the video src to a fresh URL without stopping playback
+// Token refresh — called before token expires.
+// We do NOT swap vid.src mid-playback (that causes a full rebuffer/stop).
+// Since token is 5 minutes, a refresh is rarely needed during a single viewing.
 async function refreshToken() {
   if (!_videoId || !_base) return;
-  const vid = document.getElementById('vid');
   try {
     const res = await fetch(norm(_base + '/api/refresh/' + _videoId), {
       headers: { 'X-Security-String': SEC }
@@ -166,18 +168,11 @@ async function refreshToken() {
     const data = await res.json();
     if (!data.success || !data.streamUrl) return;
 
-    // Save position, swap src, restore position
-    // The browser re-issues a Range request for the exact byte offset
-    // so the video resumes instantly with no buffering
-    const t       = vid.currentTime;
-    const paused  = vid.paused;
-    vid.src       = data.streamUrl;
-    vid.load();
-    vid.currentTime = t;
-    if (!paused) vid.play().catch(() => {});
+    // Store the refreshed URL but DON'T reload the video.
+    // The browser's current byte-range stream keeps flowing uninterrupted.
+    _refreshedUrl = data.streamUrl;
 
-    // Restart countdown with new token (45s)
-    startTokenCountdown(45);
+    startTokenCountdown(300);
   } catch (_) {
     // Silently ignore — video keeps playing until token expires
   }
@@ -241,7 +236,7 @@ async function loadVideo() {
       vid.style.display = 'block';
       vid.src = data.streamUrl;
       vid.load();
-      startTokenCountdown(data.tokenTtl || 45);
+      startTokenCountdown(data.tokenTtl || 300);
     }
 
   } catch (e) {
