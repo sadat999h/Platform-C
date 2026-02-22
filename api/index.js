@@ -1,339 +1,464 @@
-// api/index.js — Platform C serverless handler
+// api/index.js - Platform C Player (serverless handler for Vercel)
+// IMPORTANT: MASTER_SECURITY_STRING must match Platform B exactly
+
+const MASTER_SECURITY_STRING = '84418779257393762955868022673598';
+
 export default function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-  if (req.method === 'OPTIONS') { res.status(204).end(); return; }
-  res.setHeader('Content-Type', 'text/html; charset=utf-8');
-  res.status(200).send(`<!DOCTYPE html>
+
+  // The entire Platform C UI is served as HTML from this handler.
+  // The <script> block below implements the chunked MediaSource player.
+  // There is no src URL visible to IDM — video data arrives via fetch()
+  // into a MediaSource buffer, which is exposed to <video> as a blob:// URL.
+
+  const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Video Player Pro</title>
-<style>
-*{margin:0;padding:0;box-sizing:border-box}
-body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#0a0a0a;color:#fff;min-height:100vh}
-.hdr{background:linear-gradient(135deg,#1a1a2e,#16213e);padding:18px 24px;box-shadow:0 2px 20px rgba(0,0,0,.5)}
-.hdr-in{max-width:1200px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px}
-.logo{font-size:24px;font-weight:700;background:linear-gradient(135deg,#667eea,#764ba2);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
-.badge{background:rgba(76,175,80,.2);color:#4caf50;padding:5px 12px;border-radius:20px;font-size:12px;font-weight:600}
-.wrap{max-width:1200px;margin:0 auto;padding:32px 20px}
-.card{background:linear-gradient(135deg,#1a1a2e,#16213e);border-radius:16px;padding:32px;margin-bottom:24px;box-shadow:0 8px 32px rgba(0,0,0,.3)}
-.card-title{font-size:20px;font-weight:700;margin-bottom:16px;background:linear-gradient(135deg,#667eea,#764ba2);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
-input[type=url]{width:100%;padding:14px 16px;background:rgba(255,255,255,.06);border:2px solid rgba(255,255,255,.1);border-radius:10px;color:#fff;font-size:15px;margin-bottom:16px;transition:border-color .2s}
-input:focus{outline:none;border-color:#667eea}
-input::placeholder{color:rgba(255,255,255,.35)}
-.btn{padding:14px 36px;background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:600;cursor:pointer;transition:transform .15s,opacity .15s}
-.btn:hover:not(:disabled){transform:translateY(-2px)}
-.btn:disabled{opacity:.5;cursor:not-allowed}
-.sbadge{display:inline-block;margin-top:12px;background:rgba(76,175,80,.12);color:#4caf50;border:1px solid rgba(76,175,80,.28);padding:6px 12px;border-radius:6px;font-size:11px}
-.err{background:rgba(244,67,54,.14);border:1px solid rgba(244,67,54,.3);color:#f44336;padding:12px 16px;border-radius:10px;margin-top:12px;display:none;line-height:1.6}
-#vSec{display:none}
-#vSec.on{display:block}
-.ph{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;flex-wrap:wrap;gap:8px}
-.ptitle{font-size:18px;font-weight:700}
-.cbtn{padding:8px 16px;background:rgba(255,59,48,.18);color:#ff3b30;border:1px solid rgba(255,59,48,.25);border-radius:8px;cursor:pointer;font-weight:600;font-size:13px}
-.cbtn:hover{background:rgba(255,59,48,.3)}
-.pwrap{position:relative;padding-bottom:56.25%;height:0;background:#000;border-radius:12px;overflow:hidden}
-video,iframe{position:absolute;inset:0;width:100%;height:100%;border:none;background:#000}
-.ov{position:absolute;inset:0;z-index:5;pointer-events:none}
-.tok-bar-wrap{margin-top:8px;height:3px;background:rgba(255,255,255,.08);border-radius:2px;overflow:hidden}
-.tok-bar{height:100%;background:linear-gradient(90deg,#4caf50,#8bc34a);border-radius:2px;transition:width 1s linear}
-.tok-lbl{font-size:10px;color:rgba(255,255,255,.3);margin-top:4px;text-align:right}
-#loadSec{display:none;text-align:center;padding:48px;color:rgba(255,255,255,.5)}
-.lspin{width:44px;height:44px;border:3px solid rgba(255,255,255,.1);border-top-color:#667eea;border-radius:50%;animation:sp 1s linear infinite;margin:0 auto 14px}
-@keyframes sp{to{transform:rotate(360deg)}}
-*{-webkit-user-select:none;-moz-user-select:none;user-select:none}
-input[type=url]{-webkit-user-select:text;-moz-user-select:text;user-select:text}
-video,img,iframe{-webkit-user-drag:none;user-drag:none}
-@media(max-width:600px){.card{padding:20px}.logo{font-size:20px}}
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Platform C - Video Player Pro</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0a0a0a; color: white; min-height: 100vh;
+        }
+        .header { background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); padding: 20px; box-shadow: 0 2px 20px rgba(0,0,0,0.5); }
+        .header-content { max-width: 1400px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+        .logo { font-size: 28px; font-weight: 700; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .status { background: rgba(76,175,80,0.2); color: #4caf50; padding: 6px 14px; border-radius: 20px; font-size: 12px; font-weight: 600; }
+        .container { max-width: 1400px; margin: 0 auto; padding: 40px 20px; }
+        .input-section { background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); padding: 40px; border-radius: 20px; margin-bottom: 40px; box-shadow: 0 10px 40px rgba(0,0,0,0.3); }
+        .input-title { font-size: 24px; font-weight: 700; margin-bottom: 10px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .instructions { background: rgba(102,126,234,0.1); border-left: 4px solid #667eea; padding: 15px; border-radius: 8px; margin-bottom: 20px; font-size: 14px; line-height: 1.6; }
+        .instructions strong { color: #667eea; }
+        input[type="url"] { width: 100%; padding: 16px 20px; background: rgba(255,255,255,0.05); border: 2px solid rgba(255,255,255,0.1); border-radius: 12px; color: white; font-size: 15px; margin-bottom: 20px; }
+        input:focus { outline: none; border-color: #667eea; }
+        input::placeholder { color: rgba(255,255,255,0.4); }
+        .btn { padding: 16px 40px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 12px; font-size: 16px; font-weight: 600; cursor: pointer; transition: transform 0.2s; width: 100%; }
+        .btn:hover:not(:disabled) { transform: translateY(-2px); }
+        .btn:disabled { opacity: 0.6; cursor: not-allowed; }
+        .video-section { display: none; background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); padding: 30px; border-radius: 20px; }
+        .video-section.active { display: block; }
+        .video-header { display: flex; justify-content: space-between; margin-bottom: 25px; align-items: center; flex-wrap: wrap; gap: 10px; }
+        .video-title { font-size: 22px; font-weight: 700; }
+        .close-btn { padding: 10px 20px; background: rgba(255,59,48,0.2); border: 1px solid rgba(255,59,48,0.3); color: #ff3b30; border-radius: 10px; cursor: pointer; font-weight: 600; border: none; }
+        .close-btn:hover { background: rgba(255,59,48,0.3); }
+        .player-wrapper { position: relative; padding-bottom: 56.25%; height: 0; background: #000; border-radius: 16px; overflow: hidden; }
+        video, iframe { position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: none; }
+        .buffer-bar-wrap { margin-top: 12px; background: rgba(255,255,255,0.08); border-radius: 6px; height: 6px; overflow: hidden; }
+        .buffer-bar { height: 100%; width: 0%; background: linear-gradient(90deg, #667eea, #764ba2); border-radius: 6px; transition: width 0.3s; }
+        .buffer-label { font-size: 11px; color: rgba(255,255,255,0.4); margin-top: 5px; text-align: right; }
+        .error { background: rgba(244,67,54,0.2); padding: 16px; border-radius: 12px; margin-top: 20px; color: #f44336; border: 1px solid rgba(244,67,54,0.3); line-height: 1.8; }
+        .error strong { color: #ff6b6b; }
+        .error code { background: rgba(255,255,255,0.1); padding: 2px 6px; border-radius: 4px; font-family: monospace; font-size: 13px; display: inline-block; }
+        .loading { text-align: center; padding: 60px; color: rgba(255,255,255,0.6); display: none; }
+        .spinner { border: 3px solid rgba(255,255,255,0.1); border-top: 3px solid #667eea; border-radius: 50%; width: 50px; height: 50px; animation: spin 1s linear infinite; margin: 0 auto 20px; }
+        @keyframes spin { 100% { transform: rotate(360deg); } }
+        .security-badge { background: rgba(76,175,80,0.2); color: #4caf50; padding: 8px 16px; border-radius: 8px; font-size: 12px; margin-top: 15px; border: 1px solid rgba(76,175,80,0.3); }
+        * { -webkit-user-select: none; -moz-user-select: none; user-select: none; }
+        input[type="url"] { -webkit-user-select: text; -moz-user-select: text; user-select: text; }
+        video, img, iframe { -webkit-user-drag: none; user-drag: none; }
+        .video-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10; background: transparent; pointer-events: none; }
+        @media (max-width: 768px) { .input-section { padding: 20px; } .logo { font-size: 24px; } }
+    </style>
 </head>
 <body>
-
-<div class="hdr">
-  <div class="hdr-in">
-    <div class="logo">🎬 Video Player Pro</div>
-    <div class="badge">🔒 Protected</div>
-  </div>
-</div>
-
-<div class="wrap">
-  <div class="card">
-    <div class="card-title">Load Secure Video</div>
-    <input type="url" id="urlIn" placeholder="Paste Platform B video URL… e.g. https://platform-b.vercel.app/video/abc123">
-    <button class="btn" id="loadBtn">▶ Load Video</button>
-    <div class="sbadge">🛡 5-minute tokens · Strict referer enforcement · UA blocklist</div>
-    <div class="err" id="errBox"></div>
-  </div>
-
-  <div id="loadSec"><div class="lspin"></div><p>Connecting…</p></div>
-
-  <div id="vSec" class="card">
-    <div class="ph">
-      <div class="ptitle">Now Playing</div>
-      <button class="cbtn" id="closeBtn">✕ Close</button>
+    <div class="header">
+        <div class="header-content">
+            <div class="logo">🎬 Video Player Pro</div>
+            <div class="status">🔒 Fully Protected</div>
+        </div>
     </div>
-    <div class="pwrap">
-      <video id="vid" controls playsinline preload="auto"
-             controlsList="nodownload nofullscreen noremoteplayback"
-             disablePictureInPicture
-             oncontextmenu="return false;"></video>
-      <iframe id="ifr" allowfullscreen allow="autoplay"
-              style="display:none" oncontextmenu="return false;"></iframe>
-      <div class="ov" oncontextmenu="return false;"></div>
+    <div class="container">
+        <div class="input-section">
+            <div class="input-title">Load Your Secure Video</div>
+            <div class="instructions">
+                <strong>📋 How to use:</strong><br>
+                1️⃣ Go to <strong>Platform B</strong> first<br>
+                2️⃣ Generate a video URL there<br>
+                3️⃣ Copy the URL (looks like: <code>https://platform-b.../video/abc123</code>)<br>
+                4️⃣ Paste it below and click Load Video
+            </div>
+            <input type="url" id="videoUrl" placeholder="Paste Platform B video URL here...">
+            <button class="btn" id="loadBtn">▶️ Load Video</button>
+            <div class="security-badge">🛡️ Original URLs never exposed</div>
+            <div id="error" class="error" style="display: none;"></div>
+        </div>
+        <div id="loadingSection" class="loading">
+            <div class="spinner"></div>
+            <p>Loading secure stream...</p>
+        </div>
+        <div id="videoSection" class="video-section">
+            <div class="video-header">
+                <div class="video-title">Now Playing</div>
+                <button class="close-btn" id="closeBtn">✕ Close</button>
+            </div>
+            <div class="player-wrapper">
+                <video id="videoPlayer" controls playsinline
+                       controlsList="nodownload nofullscreen noremoteplayback"
+                       disablePictureInPicture oncontextmenu="return false;"></video>
+                <iframe id="iframePlayer" allowfullscreen allow="autoplay" oncontextmenu="return false;"></iframe>
+                <div class="video-overlay" oncontextmenu="return false;"></div>
+            </div>
+            <div class="buffer-bar-wrap" id="bufferWrap" style="display:none;">
+                <div class="buffer-bar" id="bufferBar"></div>
+            </div>
+            <div class="buffer-label" id="bufferLabel"></div>
+        </div>
     </div>
-    <div class="tok-bar-wrap" id="tokWrap" style="display:none">
-      <div class="tok-bar" id="tokBar" style="width:100%"></div>
-    </div>
-    <div class="tok-lbl" id="tokLbl"></div>
-  </div>
-</div>
 
-<script>
-'use strict';
-// ─────────────────────────────────────────────
-// CONFIG
-// ─────────────────────────────────────────────
-const SEC = '84418779257393762955868022673598';
+    <script>
+        const SEC = '${MASTER_SECURITY_STRING}';
+        let vid = null;
+        let ifr = null;
+        let _mediaSource = null;
+        let _sourceBuffer = null;
+        let _chunkState   = null;
+        let _stopped      = false;
 
-// ─────────────────────────────────────────────
-// STATE
-// ─────────────────────────────────────────────
-let _videoId   = null;
-let _base      = null;
-let _tokTimer  = null;   // setInterval for token countdown
-let _refreshAt = 0;      // timestamp when we should refresh the token
-let _tokEnd    = 0;      // timestamp when current token expires
-let _refreshedUrl = null; // most recent refreshed stream URL
+        const BUFFER_AHEAD_MAX = 60;
+        const BUFFER_AHEAD_MIN = 15;
+        const INITIAL_BUFFER   = 8;
 
-// ─────────────────────────────────────────────
-// HELPERS
-// ─────────────────────────────────────────────
-const norm = u => u.replace(/([^:])\\/\\/+/g, '$1/');
+        function normalizeUrl(url) {
+            return url.replace(/([^:])\\\/\\\/+/g, '$1/');
+        }
 
-function showErr(msg) {
-  const e = document.getElementById('errBox');
-  e.textContent = '❌ ' + msg;
-  e.style.display = 'block';
-  setTimeout(() => { e.style.display = 'none'; }, 10000);
-}
+        function isRawVideoUrl(url) {
+            const rawDomains = ['dropbox.com','drive.google.com','youtube.com','youtu.be','vimeo.com','dailymotion.com'];
+            try { const u = new URL(url); return rawDomains.some(d => u.hostname.includes(d)); }
+            catch { return false; }
+        }
 
-// ─────────────────────────────────────────────
-// TOKEN COUNTDOWN BAR
-// Shows time remaining on current token.
-// Silently refreshes the src 15s before expiry.
-// ─────────────────────────────────────────────
-function startTokenCountdown(ttlSeconds) {
-  const vid    = document.getElementById('vid');
-  const bar    = document.getElementById('tokBar');
-  const lbl    = document.getElementById('tokLbl');
-  const wrap   = document.getElementById('tokWrap');
-  const total  = ttlSeconds * 1000;
+        async function fetchChunk(chunkUrl, chunkIndex, chunkToken) {
+            const url = chunkUrl + '?chunk=' + chunkIndex;
+            const response = await fetch(url, {
+                headers: { 'x-chunk-token': chunkToken, 'Origin': window.location.origin }
+            });
+            if (response.status === 204) return { done: true, nextToken: null, buffer: null };
+            if (!response.ok && response.status !== 206)
+                throw new Error('Chunk ' + chunkIndex + ' failed: ' + response.status);
+            const nextToken   = response.headers.get('x-next-chunk-token') || '';
+            const isLastChunk = response.headers.get('x-is-last-chunk') === 'true';
+            const buffer      = await response.arrayBuffer();
+            return { done: isLastChunk || !nextToken, nextToken, buffer };
+        }
 
-  _tokEnd     = Date.now() + total;
-  _refreshAt  = _tokEnd - 60000; // refresh 60s before expiry
-  wrap.style.display = 'block';
-  bar.style.width    = '100%';
+        async function appendToSourceBuffer(buffer) {
+            if (_stopped || !_sourceBuffer || !_mediaSource || _mediaSource.readyState !== 'open') return;
+            if (_sourceBuffer.updating) {
+                await new Promise((res, rej) => {
+                    _sourceBuffer.addEventListener('updateend', res, { once: true });
+                    _sourceBuffer.addEventListener('error', rej, { once: true });
+                });
+            }
+            await new Promise((resolve, reject) => {
+                _sourceBuffer.addEventListener('updateend', resolve, { once: true });
+                _sourceBuffer.addEventListener('error', reject, { once: true });
+                try {
+                    _sourceBuffer.appendBuffer(buffer);
+                } catch (e) {
+                    if (e.name === 'QuotaExceededError') {
+                        try {
+                            const evictEnd = Math.max(0, (vid ? vid.currentTime : 0) - 30);
+                            if (evictEnd > 0) {
+                                _sourceBuffer.remove(0, evictEnd);
+                                _sourceBuffer.addEventListener('updateend', () => {
+                                    try { _sourceBuffer.appendBuffer(buffer); } catch (_) { resolve(); }
+                                }, { once: true });
+                            } else { resolve(); }
+                        } catch (_) { resolve(); }
+                    } else { reject(e); }
+                }
+            });
+        }
 
-  clearInterval(_tokTimer);
-  _tokTimer = setInterval(async () => {
-    const rem = Math.max(0, _tokEnd - Date.now());
-    bar.style.width = (rem / total * 100).toFixed(1) + '%';
-    lbl.textContent = rem > 0
-      ? \`Token: \${Math.ceil(rem / 1000)}s remaining\`
-      : 'Refreshing token…';
+        function getBufferedAhead() {
+            if (!vid || !vid.buffered || vid.buffered.length === 0) return 0;
+            const ct = vid.currentTime;
+            for (let i = 0; i < vid.buffered.length; i++) {
+                if (vid.buffered.start(i) <= ct + 0.5 && vid.buffered.end(i) > ct)
+                    return vid.buffered.end(i) - ct;
+            }
+            return 0;
+        }
 
-    // Refresh token 15s before expiry
-    if (Date.now() >= _refreshAt && rem > 0) {
-      _refreshAt = Infinity; // prevent double-refresh
-      await refreshToken();
-    }
+        async function startChunkedStream(chunkUrl, firstChunkToken, streamToken, infoUrl) {
+            _stopped = false;
+            const bufWrap  = document.getElementById('bufferWrap');
+            const bufBar   = document.getElementById('bufferBar');
+            const bufLabel = document.getElementById('bufferLabel');
 
-    if (rem <= 0) clearInterval(_tokTimer);
-  }, 500);
-}
+            let totalChunks = null;
+            try {
+                const infoRes = await fetch(infoUrl, {
+                    headers: { 'x-stream-token': streamToken, 'Origin': window.location.origin }
+                });
+                if (infoRes.ok) {
+                    const info = await infoRes.json();
+                    if (info.totalChunks) totalChunks = info.totalChunks;
+                }
+            } catch (_) {}
 
-// Token refresh — called before token expires.
-// We do NOT swap vid.src mid-playback (that causes a full rebuffer/stop).
-// Since token is 5 minutes, a refresh is rarely needed during a single viewing.
-async function refreshToken() {
-  if (!_videoId || !_base) return;
-  try {
-    const res = await fetch(norm(_base + '/api/refresh/' + _videoId), {
-      headers: { 'X-Security-String': SEC }
-    });
-    if (!res.ok) return;
-    const data = await res.json();
-    if (!data.success || !data.streamUrl) return;
+            bufWrap.style.display = 'block';
+            bufLabel.textContent  = 'Connecting...';
 
-    // Store the refreshed URL but DON'T reload the video.
-    // The browser's current byte-range stream keeps flowing uninterrupted.
-    _refreshedUrl = data.streamUrl;
+            if (_mediaSource) { try { _mediaSource.endOfStream(); } catch (_) {} }
+            _mediaSource = new MediaSource();
+            vid.src = URL.createObjectURL(_mediaSource);
+            vid.preload = 'auto';
 
-    startTokenCountdown(300);
-  } catch (_) {
-    // Silently ignore — video keeps playing until token expires
-  }
-}
+            await new Promise((resolve, reject) => {
+                _mediaSource.addEventListener('sourceopen', resolve, { once: true });
+                _mediaSource.addEventListener('error', reject, { once: true });
+            });
 
-// ─────────────────────────────────────────────
-// LOAD VIDEO
-// ─────────────────────────────────────────────
-async function loadVideo() {
-  const url   = document.getElementById('urlIn').value.trim();
-  const btn   = document.getElementById('loadBtn');
-  const load  = document.getElementById('loadSec');
-  const vSec  = document.getElementById('vSec');
-  const vid   = document.getElementById('vid');
-  const ifr   = document.getElementById('ifr');
+            const mimeTypes = [
+                'video/mp4; codecs="avc1.42E01E, mp4a.40.2"',
+                'video/mp4; codecs="avc1.64001f, mp4a.40.2"',
+                'video/mp4'
+            ];
+            const mimeType = mimeTypes.find(m => MediaSource.isTypeSupported(m));
+            if (!mimeType) throw new Error('MSE_UNSUPPORTED');
 
-  document.getElementById('errBox').style.display = 'none';
+            _sourceBuffer = _mediaSource.addSourceBuffer(mimeType);
+            _sourceBuffer.mode = 'sequence';
 
-  if (!url || !url.includes('/video/')) {
-    showErr('Invalid URL — must contain /video/'); return;
-  }
+            _chunkState = {
+                chunkUrl, currentToken: firstChunkToken,
+                chunkIndex: 0, totalChunks, done: false,
+                fetching: false, prefetchedChunk: null
+            };
 
-  vSec.classList.remove('on');
-  load.style.display = 'block';
-  btn.disabled = true;
-  clearInterval(_tokTimer);
+            let playbackStarted = false;
 
-  try {
-    const m = url.match(/\\/video\\/([^/?#]+)/);
-    if (!m) throw new Error('Cannot extract video ID');
-    _videoId = m[1];
-    _base    = url.slice(0, url.indexOf('/video/'));
+            function updateBufferUI() {
+                if (!totalChunks) return;
+                const pct   = Math.min(100, Math.round((_chunkState.chunkIndex / totalChunks) * 100));
+                const ahead = getBufferedAhead();
+                bufBar.style.width = pct + '%';
+                bufLabel.textContent = _chunkState.done
+                    ? 'Fully loaded \u2713'
+                    : 'Buffered: ' + pct + '% (' + Math.round(ahead) + 's ahead)';
+            }
 
-    const res = await fetch(norm(_base + '/api/video/' + _videoId), {
-      headers: { 'X-Security-String': SEC, 'Accept': 'application/json' }
-    });
-    if (res.status === 403) throw new Error('Access denied — wrong security key');
-    if (res.status === 404) throw new Error('Video not found');
-    if (!res.ok)            throw new Error('Server error ' + res.status);
-    const data = await res.json();
-    if (!data.success) throw new Error(data.message || 'Load failed');
+            vid.addEventListener('waiting', () => {
+                if (!_chunkState.fetching && !_chunkState.done && !_stopped) pump();
+            });
+            vid.addEventListener('timeupdate', updateBufferUI);
 
-    load.style.display = 'none';
-    vSec.classList.add('on');
-    btn.disabled = false;
+            async function pump() {
+                if (_stopped || _chunkState.done || _chunkState.fetching) return;
+                _chunkState.fetching = true;
+                try {
+                    while (!_stopped && !_chunkState.done) {
+                        const ahead = getBufferedAhead();
+                        if (playbackStarted && ahead >= BUFFER_AHEAD_MAX) {
+                            _chunkState.fetching = false;
+                            const resumeCheck = setInterval(() => {
+                                if (_stopped || _chunkState.done) { clearInterval(resumeCheck); return; }
+                                if (getBufferedAhead() < BUFFER_AHEAD_MIN) { clearInterval(resumeCheck); pump(); }
+                            }, 2000);
+                            return;
+                        }
 
-    if (data.type === 'embed') {
-      // YouTube / Vimeo / Dailymotion
-      ifr.src = norm(data.proxyUrl) + '?key=' + encodeURIComponent(SEC);
-      ifr.style.display = 'block';
-      vid.style.display = 'none';
-      document.getElementById('tokWrap').style.display = 'none';
-      document.getElementById('tokLbl').textContent   = '';
+                        let chunkData;
+                        if (_chunkState.prefetchedChunk) {
+                            chunkData = _chunkState.prefetchedChunk;
+                            _chunkState.prefetchedChunk = null;
+                        } else {
+                            chunkData = await fetchChunk(_chunkState.chunkUrl, _chunkState.chunkIndex, _chunkState.currentToken);
+                        }
 
-    } else {
-      // Direct video — set src, browser handles everything natively
-      // No MSE, no chunking, no mp4box — just a URL with a token
-      // Browser sends Range requests automatically for instant seeking
-      ifr.style.display = 'none';
-      ifr.src = '';
-      vid.style.display = 'block';
-      vid.src = data.streamUrl;
-      vid.load();
-      startTokenCountdown(data.tokenTtl || 300);
-    }
+                        let prefetchPromise = null;
+                        if (!chunkData.done && chunkData.nextToken) {
+                            prefetchPromise = fetchChunk(_chunkState.chunkUrl, _chunkState.chunkIndex + 1, chunkData.nextToken)
+                                .then(c => { _chunkState.prefetchedChunk = c; }).catch(() => {});
+                        }
 
-  } catch (e) {
-    load.style.display = 'none';
-    btn.disabled = false;
-    showErr(e.message);
-  }
-}
+                        if (chunkData.buffer && chunkData.buffer.byteLength > 0)
+                            await appendToSourceBuffer(chunkData.buffer);
 
-// ─────────────────────────────────────────────
-// CLOSE
-// ─────────────────────────────────────────────
-function closeVideo() {
-  clearInterval(_tokTimer);
-  _videoId = _base = null;
-  const vid = document.getElementById('vid');
-  const ifr = document.getElementById('ifr');
-  document.getElementById('vSec').classList.remove('on');
-  document.getElementById('tokWrap').style.display = 'none';
-  document.getElementById('tokLbl').textContent = '';
-  if (vid) { vid.pause(); vid.removeAttribute('src'); vid.load(); }
-  if (ifr) { ifr.src = ''; ifr.style.display = 'none'; }
-}
+                        _chunkState.chunkIndex++;
+                        _chunkState.currentToken = chunkData.nextToken;
+                        _chunkState.done = chunkData.done;
+                        updateBufferUI();
 
-// ─────────────────────────────────────────────
-// EVENTS
-// ─────────────────────────────────────────────
-document.getElementById('loadBtn') .addEventListener('click',    loadVideo);
-document.getElementById('closeBtn').addEventListener('click',    closeVideo);
-document.getElementById('urlIn')   .addEventListener('keypress', e => { if (e.key === 'Enter') loadVideo(); });
+                        if (!playbackStarted && getBufferedAhead() >= INITIAL_BUFFER) {
+                            playbackStarted = true;
+                            bufLabel.textContent = 'Playing...';
+                            vid.play().catch(() => {});
+                        }
 
-// ─────────────────────────────────────────────
-// ANTI-DOWNLOAD
-// ─────────────────────────────────────────────
-document.addEventListener('contextmenu', e => { e.preventDefault(); return false; });
+                        if (prefetchPromise) await prefetchPromise;
+                    }
+                    if (!_stopped && _mediaSource && _mediaSource.readyState === 'open') {
+                        try { _mediaSource.endOfStream(); } catch (_) {}
+                    }
+                    updateBufferUI();
+                } catch (e) {
+                    _chunkState.fetching = false;
+                    if (!_stopped) { bufLabel.textContent = 'Retrying...'; setTimeout(() => { if (!_stopped) pump(); }, 2000); }
+                }
+            }
+            pump();
+        }
 
-document.addEventListener('keydown', e => {
-  const k = (e.key || '').toLowerCase();
-  if ((e.ctrlKey || e.metaKey) && ['s','u','p','i','j','c'].includes(k)) { e.preventDefault(); return false; }
-  if ((e.ctrlKey || e.metaKey) && e.shiftKey && ['i','j','c'].includes(k)) { e.preventDefault(); return false; }
-  if (k === 'f12' || k === 'printscreen') { e.preventDefault(); return false; }
-});
+        async function loadVideo() {
+            const url  = document.getElementById('videoUrl').value.trim();
+            const err  = document.getElementById('error');
+            const load = document.getElementById('loadingSection');
+            const sec  = document.getElementById('videoSection');
+            vid = document.getElementById('videoPlayer');
+            ifr = document.getElementById('iframePlayer');
+            const btn  = document.getElementById('loadBtn');
 
-document.addEventListener('dragstart', e => { e.preventDefault(); return false; });
+            if (!url) { err.innerHTML = '❌ <strong>Please enter a video URL</strong>'; err.style.display = 'block'; return; }
+            if (isRawVideoUrl(url)) {
+                err.innerHTML = '❌ <strong>Wrong URL Type!</strong><br><br>Go to <strong>Platform B</strong> first, generate a URL there, then paste it here.';
+                err.style.display = 'block'; return;
+            }
+            if (!url.includes('/video/')) {
+                err.innerHTML = '❌ <strong>Invalid URL</strong> — must contain <code>/video/</code>';
+                err.style.display = 'block'; return;
+            }
 
-document.addEventListener('visibilitychange', () => {
-  const v = document.getElementById('vid');
-  if (v && document.hidden) v.pause();
-});
+            err.style.display = 'none';
+            sec.classList.remove('active');
+            load.style.display = 'block';
+            btn.disabled = true;
 
-// Block screen capture
-if (navigator.mediaDevices) {
-  try {
-    Object.defineProperty(navigator.mediaDevices, 'getDisplayMedia', {
-      configurable: false, writable: false,
-      value: () => Promise.reject(new DOMException('Not allowed', 'NotAllowedError'))
-    });
-  } catch (_) {}
-  try {
-    const _g = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
-    Object.defineProperty(navigator.mediaDevices, 'getUserMedia', {
-      configurable: false, writable: false,
-      value: c => (c && c.video)
-        ? Promise.reject(new DOMException('Not allowed', 'NotAllowedError'))
-        : _g(c)
-    });
-  } catch (_) {}
-}
+            try {
+                const videoMatch = url.match(/\\/video\\/([^/?#]+)/);
+                if (!videoMatch) throw new Error('Could not extract video ID from URL');
+                const videoId = videoMatch[1];
+                const baseUrl = url.substring(0, url.indexOf('/video/'));
+                const apiUrl  = normalizeUrl(baseUrl + '/api/video/' + videoId);
 
-try {
-  Object.defineProperty(window, 'MediaRecorder', {
-    configurable: false, writable: false,
-    value: function() { throw new DOMException('Disabled', 'NotSupportedError'); }
-  });
-} catch (_) {}
+                const res = await fetch(apiUrl, {
+                    method: 'GET',
+                    headers: { 'X-Security-String': SEC, 'Content-Type': 'application/json', 'Accept': 'application/json', 'Origin': window.location.origin }
+                });
 
-// DevTools detection
-(function () {
-  let open = false;
-  setInterval(() => {
-    const isOpen = window.outerWidth - window.innerWidth > 160
-                || window.outerHeight - window.innerHeight > 160;
-    const v = document.getElementById('vid');
-    const f = document.getElementById('ifr');
-    if (isOpen && !open) {
-      open = true;
-      if (v) { v.pause(); v.style.visibility = 'hidden'; }
-      if (f) f.style.visibility = 'hidden';
-    } else if (!isOpen && open) {
-      open = false;
-      if (v) v.style.visibility = 'visible';
-      if (f) f.style.visibility = 'visible';
-    }
-  }, 800);
-})();
-</script>
+                if (!res.ok) {
+                    if (res.status === 403) throw new Error('Access denied — security key mismatch');
+                    if (res.status === 404) throw new Error('Video not found');
+                    if (res.status === 500) throw new Error('Server error — check Platform B');
+                    throw new Error('Failed to fetch video (Status: ' + res.status + ')');
+                }
+
+                const data = await res.json();
+                if (!data.success) throw new Error(data.message || 'Failed to load video');
+
+                load.style.display = 'none';
+                sec.classList.add('active');
+                btn.disabled = false;
+
+                if (data.type === 'embed') {
+                    ifr.src = normalizeUrl(data.proxyUrl) + '?key=' + encodeURIComponent(SEC);
+                    ifr.style.display = 'block';
+                    vid.style.display = 'none';
+                    document.getElementById('bufferWrap').style.display = 'none';
+                } else {
+                    vid.style.display = 'block';
+                    ifr.style.display = 'none';
+                    const chunkUrl        = normalizeUrl(data.chunkUrl);
+                    const firstChunkToken = data.firstChunkToken;
+                    const streamToken     = data.streamToken;
+                    const infoUrl         = normalizeUrl(baseUrl + '/api/info/' + videoId);
+
+                    if (!firstChunkToken || !streamToken) throw new Error('Missing tokens — ensure Platform B is updated');
+
+                    if (typeof MediaSource !== 'undefined' && MediaSource.isTypeSupported('video/mp4')) {
+                        try {
+                            await startChunkedStream(chunkUrl, firstChunkToken, streamToken, infoUrl);
+                        } catch (mseErr) {
+                            // MSE not supported for this codec — fall back to direct token URL
+                            vid.src = chunkUrl + '?chunk=0&chunkToken=' + encodeURIComponent(firstChunkToken);
+                            vid.load();
+                        }
+                    } else {
+                        vid.src = chunkUrl + '?chunk=0&chunkToken=' + encodeURIComponent(firstChunkToken);
+                        vid.load();
+                    }
+                }
+            } catch (e) {
+                load.style.display = 'none';
+                err.innerHTML = '❌ <strong>Error:</strong> ' + e.message;
+                err.style.display = 'block';
+                btn.disabled = false;
+            }
+        }
+
+        function closeVideo() {
+            _stopped = true;
+            document.getElementById('videoSection').classList.remove('active');
+            document.getElementById('bufferWrap').style.display = 'none';
+            document.getElementById('bufferLabel').textContent = '';
+            if (_mediaSource) { try { _mediaSource.endOfStream(); } catch (_) {} _mediaSource = null; _sourceBuffer = null; }
+            if (_chunkState) { _chunkState.done = true; _chunkState = null; }
+            if (vid) { vid.pause(); vid.src = ''; }
+            if (ifr) { ifr.src = ''; }
+        }
+
+        document.addEventListener('DOMContentLoaded', function () {
+            document.getElementById('loadBtn').addEventListener('click', loadVideo);
+            document.getElementById('closeBtn').addEventListener('click', closeVideo);
+            document.getElementById('videoUrl').addEventListener('keypress', function (e) { if (e.key === 'Enter') loadVideo(); });
+            const errorEl = document.getElementById('error');
+            const observer = new MutationObserver(function () {
+                if (errorEl.style.display === 'block') setTimeout(() => { errorEl.style.display = 'none'; }, 10000);
+            });
+            observer.observe(errorEl, { attributes: true, attributeFilter: ['style'] });
+        });
+
+        document.addEventListener('contextmenu', e => { e.preventDefault(); return false; });
+        document.addEventListener('keydown', function (e) {
+            const key = e.key.toLowerCase();
+            if ((e.ctrlKey || e.metaKey) && ['s','u','p','i','j','c'].includes(key)) { e.preventDefault(); return false; }
+            if ((e.ctrlKey || e.metaKey) && e.shiftKey && ['i','j','c'].includes(key)) { e.preventDefault(); return false; }
+            if (e.key === 'F12' || e.key === 'PrintScreen') { e.preventDefault(); return false; }
+        });
+        document.addEventListener('dragstart', e => { e.preventDefault(); return false; });
+
+        (function detectDevTools() {
+            const threshold = 160;
+            function check() {
+                const wDiff = window.outerWidth - window.innerWidth;
+                const hDiff = window.outerHeight - window.innerHeight;
+                const v = document.getElementById('videoPlayer');
+                const f = document.getElementById('iframePlayer');
+                if (wDiff > threshold || hDiff > threshold) {
+                    if (v && !v.paused) v.pause();
+                    if (v) v.style.visibility = 'hidden';
+                    if (f) f.style.visibility = 'hidden';
+                } else {
+                    if (v) v.style.visibility = 'visible';
+                    if (f) f.style.visibility = 'visible';
+                }
+            }
+            setInterval(check, 1000);
+        })();
+
+        if (window.MediaRecorder) window.MediaRecorder = undefined;
+        if (navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia) {
+            navigator.mediaDevices.getDisplayMedia = () =>
+                Promise.reject(new DOMException('Screen capture is disabled.', 'NotAllowedError'));
+        }
+        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+            const _orig = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
+            navigator.mediaDevices.getUserMedia = function (c) {
+                if (c && c.video) return Promise.reject(new DOMException('Video capture is disabled.', 'NotAllowedError'));
+                return _orig(c);
+            };
+        }
+    <\/script>
 </body>
-</html>
-`);
+</html>`;
+
+  res.setHeader('Content-Type', 'text/html');
+  res.status(200).send(html);
 }
