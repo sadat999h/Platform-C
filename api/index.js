@@ -1,8 +1,4 @@
-// api/index.js — Platform C serverless handler
-// Serves the entire player UI as HTML.
-// Player uses native <video src> — browser handles byte-range requests,
-// giving instant seeking with zero JavaScript buffering code.
-
+// api/index.js - Platform C serverless handler
 const MASTER_SECURITY_STRING = '84418779257393762955868022673598';
 
 export default function handler(req, res) {
@@ -10,257 +6,641 @@ export default function handler(req, res) {
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   if (req.method === 'OPTIONS') { res.status(204).end(); return; }
-
-  const html = `<!DOCTYPE html>
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.status(200).send(`<!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Platform C - Video Player Pro</title>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0a0a0a; color: #fff; min-height: 100vh; }
-        .header { background: linear-gradient(135deg, #1a1a2e, #16213e); padding: 20px; box-shadow: 0 2px 20px rgba(0,0,0,.5); }
-        .header-content { max-width: 1400px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
-        .logo { font-size: 28px; font-weight: 700; background: linear-gradient(135deg, #667eea, #764ba2); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
-        .badge { background: rgba(76,175,80,.2); color: #4caf50; padding: 6px 14px; border-radius: 20px; font-size: 12px; font-weight: 600; }
-        .container { max-width: 1400px; margin: 0 auto; padding: 40px 20px; }
-        .card { background: linear-gradient(135deg, #1a1a2e, #16213e); border-radius: 20px; padding: 40px; margin-bottom: 32px; box-shadow: 0 10px 40px rgba(0,0,0,.3); }
-        .card-title { font-size: 24px; font-weight: 700; margin-bottom: 10px; background: linear-gradient(135deg, #667eea, #764ba2); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
-        .instructions { background: rgba(102,126,234,.1); border-left: 4px solid #667eea; padding: 14px; border-radius: 8px; margin-bottom: 20px; font-size: 14px; line-height: 1.7; }
-        .instructions strong { color: #667eea; }
-        .instructions code { background: rgba(255,255,255,.1); padding: 1px 5px; border-radius: 4px; font-family: monospace; font-size: 13px; }
-        input[type="url"] { width: 100%; padding: 16px 20px; background: rgba(255,255,255,.05); border: 2px solid rgba(255,255,255,.1); border-radius: 12px; color: #fff; font-size: 15px; margin-bottom: 20px; transition: border-color .2s; }
-        input:focus { outline: none; border-color: #667eea; }
-        input::placeholder { color: rgba(255,255,255,.35); }
-        .btn { padding: 16px 40px; background: linear-gradient(135deg, #667eea, #764ba2); color: #fff; border: none; border-radius: 12px; font-size: 16px; font-weight: 600; cursor: pointer; transition: transform .2s, opacity .2s; width: 100%; }
-        .btn:hover:not(:disabled) { transform: translateY(-2px); }
-        .btn:disabled { opacity: .55; cursor: not-allowed; }
-        .sec-badge { display: inline-block; background: rgba(76,175,80,.15); color: #4caf50; border: 1px solid rgba(76,175,80,.3); padding: 7px 16px; border-radius: 8px; font-size: 12px; margin-top: 14px; }
-        .error { background: rgba(244,67,54,.15); border: 1px solid rgba(244,67,54,.3); color: #f44336; padding: 14px 18px; border-radius: 12px; margin-top: 16px; display: none; line-height: 1.6; }
-        #videoSection { display: none; }
-        #videoSection.active { display: block; }
-        .player-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 22px; flex-wrap: wrap; gap: 10px; }
-        .player-title { font-size: 22px; font-weight: 700; }
-        .close-btn { padding: 9px 20px; background: rgba(255,59,48,.18); color: #ff3b30; border: 1px solid rgba(255,59,48,.25); border-radius: 10px; cursor: pointer; font-weight: 600; font-size: 14px; }
-        .close-btn:hover { background: rgba(255,59,48,.3); }
-        .player-wrap { position: relative; padding-bottom: 56.25%; height: 0; background: #000; border-radius: 16px; overflow: hidden; }
-        video, iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: none; }
-        .overlay { position: absolute; inset: 0; z-index: 10; background: transparent; pointer-events: none; }
-        .token-bar-wrap { margin-top: 10px; background: rgba(255,255,255,.06); border-radius: 6px; height: 4px; overflow: hidden; }
-        .token-bar { height: 100%; background: linear-gradient(90deg, #4caf50, #8bc34a); border-radius: 6px; transition: width 1s linear; }
-        .token-label { font-size: 11px; color: rgba(255,255,255,.35); margin-top: 5px; text-align: right; }
-        #loadingSection { display: none; text-align: center; padding: 60px; color: rgba(255,255,255,.55); }
-        .spinner { width: 50px; height: 50px; border: 3px solid rgba(255,255,255,.1); border-top-color: #667eea; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 18px; }
-        @keyframes spin { to { transform: rotate(360deg); } }
-        * { -webkit-user-select: none; -moz-user-select: none; user-select: none; }
-        input[type="url"] { -webkit-user-select: text; -moz-user-select: text; user-select: text; }
-        video, img, iframe { -webkit-user-drag: none; user-drag: none; }
-        @media (max-width: 768px) { .card { padding: 20px; } .logo { font-size: 22px; } }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Video Player Pro</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#0a0a0a;color:#fff;min-height:100vh}
+.hdr{background:linear-gradient(135deg,#1a1a2e,#16213e);padding:18px 24px;box-shadow:0 2px 20px rgba(0,0,0,.5)}
+.hdr-in{max-width:1400px;margin:0 auto;display:flex;align-items:center;justify-content:space-between}
+.logo{font-size:26px;font-weight:700;background:linear-gradient(135deg,#667eea,#764ba2);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.sec-dot{background:rgba(76,175,80,.2);color:#4caf50;padding:5px 14px;border-radius:20px;font-size:12px;font-weight:600}
+.wrap{max-width:1400px;margin:0 auto;padding:36px 20px}
+.card{background:linear-gradient(135deg,#1a1a2e,#16213e);border-radius:18px;padding:36px;margin-bottom:28px;box-shadow:0 8px 32px rgba(0,0,0,.3)}
+.card-title{font-size:22px;font-weight:700;margin-bottom:18px;background:linear-gradient(135deg,#667eea,#764ba2);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+input[type=url]{width:100%;padding:15px 18px;background:rgba(255,255,255,.05);border:2px solid rgba(255,255,255,.1);border-radius:11px;color:#fff;font-size:15px;margin-bottom:18px;transition:border-color .2s}
+input:focus{outline:none;border-color:#667eea}
+input::placeholder{color:rgba(255,255,255,.35)}
+.btn{padding:15px 40px;background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;border:none;border-radius:11px;font-size:15px;font-weight:600;cursor:pointer;transition:transform .15s,opacity .15s}
+.btn:hover:not(:disabled){transform:translateY(-2px)}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.sbadge{display:inline-block;margin-top:13px;background:rgba(76,175,80,.12);color:#4caf50;border:1px solid rgba(76,175,80,.28);padding:6px 14px;border-radius:7px;font-size:12px}
+.err{background:rgba(244,67,54,.14);border:1px solid rgba(244,67,54,.3);color:#f44336;padding:13px 16px;border-radius:10px;margin-top:14px;display:none;line-height:1.55}
+
+/* player */
+#vSec{display:none}
+#vSec.on{display:block}
+.ph{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px}
+.ptitle{font-size:20px;font-weight:700}
+.cbtn{padding:8px 18px;background:rgba(255,59,48,.18);color:#ff3b30;border:1px solid rgba(255,59,48,.25);border-radius:9px;cursor:pointer;font-weight:600;font-size:13px}
+.cbtn:hover{background:rgba(255,59,48,.3)}
+.pwrap{position:relative;padding-bottom:56.25%;height:0;background:#000;border-radius:14px;overflow:hidden}
+video,iframe{position:absolute;inset:0;width:100%;height:100%;border:none}
+.ov{position:absolute;inset:0;z-index:10;pointer-events:none}
+
+/* buffer progress */
+.bwrap{margin-top:10px;height:5px;background:rgba(255,255,255,.08);border-radius:4px;overflow:hidden}
+.bbar{height:100%;width:0;background:linear-gradient(90deg,#667eea,#764ba2);border-radius:4px;transition:width .4s}
+.blbl{font-size:11px;color:rgba(255,255,255,.35);margin-top:5px;text-align:right}
+
+/* spinner overlay on video while buffering */
+.spin-ov{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.45);z-index:20;transition:opacity .3s}
+.spin-ov.hide{opacity:0;pointer-events:none}
+.spin{width:48px;height:48px;border:3px solid rgba(255,255,255,.15);border-top-color:#667eea;border-radius:50%;animation:sp 1s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+
+#loadSec{display:none;text-align:center;padding:56px;color:rgba(255,255,255,.5)}
+.lspin{width:48px;height:48px;border:3px solid rgba(255,255,255,.1);border-top-color:#667eea;border-radius:50%;animation:sp 1s linear infinite;margin:0 auto 16px}
+
+*{-webkit-user-select:none;-moz-user-select:none;user-select:none}
+input[type=url]{-webkit-user-select:text;-moz-user-select:text;user-select:text}
+video,img,iframe{-webkit-user-drag:none;user-drag:none}
+@media(max-width:600px){.card{padding:20px}.logo{font-size:20px}}
+</style>
 </head>
 <body>
-<div class="header">
-    <div class="header-content">
-        <div class="logo">🎬 Video Player Pro</div>
-        <div class="badge">🔒 Fully Protected</div>
-    </div>
+
+<div class="hdr">
+  <div class="hdr-in">
+    <div class="logo">🎬 Video Player Pro</div>
+    <div class="sec-dot">🔒 Protected</div>
+  </div>
 </div>
-<div class="container">
-    <div class="card">
-        <div class="card-title">Load Your Secure Video</div>
-        <div class="instructions">
-            <strong>📋 How to use:</strong><br>
-            1️⃣ Go to <strong>Platform B</strong> and generate a video URL<br>
-            2️⃣ Copy the URL — looks like <code>https://platform-b…/video/abc123</code><br>
-            3️⃣ Paste it below and click Load Video
-        </div>
-        <input type="url" id="videoUrl" placeholder="Paste Platform B video URL here…">
-        <button class="btn" id="loadBtn">▶️ Load Video</button>
-        <div class="sec-badge">🛡️ Original URLs never exposed · Stream tokens expire in 2h</div>
-        <div class="error" id="error"></div>
+
+<div class="wrap">
+
+  <div class="card">
+    <div class="card-title">Load Secure Video</div>
+    <input type="url" id="urlIn" placeholder="Paste Platform B video URL… https://platform-b…/video/abc123">
+    <button class="btn" id="loadBtn">▶ Load Video</button>
+    <div class="sbadge">🛡 Blob URL — IDM cannot detect or intercept · Token in header only</div>
+    <div class="err" id="errBox"></div>
+  </div>
+
+  <div id="loadSec">
+    <div class="lspin"></div>
+    <p>Connecting…</p>
+  </div>
+
+  <div id="vSec" class="card">
+    <div class="ph">
+      <div class="ptitle">Now Playing</div>
+      <button class="cbtn" id="closeBtn">✕ Close</button>
     </div>
-    <div id="loadingSection">
-        <div class="spinner"></div>
-        <p>Connecting to secure stream…</p>
+    <div class="pwrap">
+      <video id="vid" controls playsinline preload="auto"
+             controlsList="nodownload nofullscreen noremoteplayback"
+             disablePictureInPicture oncontextmenu="return false;"></video>
+      <iframe id="ifr" allowfullscreen allow="autoplay" oncontextmenu="return false;"></iframe>
+      <div class="ov" oncontextmenu="return false;"></div>
+      <div class="spin-ov" id="spinOv"><div class="spin"></div></div>
     </div>
-    <div id="videoSection" class="card">
-        <div class="player-header">
-            <div class="player-title">Now Playing</div>
-            <button class="close-btn" id="closeBtn">✕ Close</button>
-        </div>
-        <div class="player-wrap">
-            <video id="videoPlayer" controls playsinline preload="metadata"
-                   controlsList="nodownload nofullscreen noremoteplayback"
-                   disablePictureInPicture oncontextmenu="return false;"></video>
-            <iframe id="iframePlayer" allowfullscreen allow="autoplay" oncontextmenu="return false;"></iframe>
-            <div class="overlay" oncontextmenu="return false;"></div>
-        </div>
-        <div class="token-bar-wrap" id="tokenBarWrap" style="display:none">
-            <div class="token-bar" id="tokenBar" style="width:100%"></div>
-        </div>
-        <div class="token-label" id="tokenLabel"></div>
-    </div>
+    <div class="bwrap" id="bWrap" style="display:none"><div class="bbar" id="bBar"></div></div>
+    <div class="blbl" id="bLbl"></div>
+  </div>
+
 </div>
+
 <script>
-    const SEC = '${MASTER_SECURITY_STRING}';
-    let _tokenTimer = null, _videoId = null, _baseUrl = null;
+// ═══════════════════════════════════════════════════════════════════════
+//  CONFIG
+// ═══════════════════════════════════════════════════════════════════════
+const SEC = '84418779257393762955868022673598';
 
-    function norm(u) { return u.replace(/([^:])\\\/\\\/+/g, '$1/'); }
-    function isRaw(u) {
-        try { const h = new URL(u).hostname; return ['dropbox','drive.google','youtube','youtu.be','vimeo','dailymotion'].some(d => h.includes(d)); }
-        catch { return false; }
-    }
-    function showErr(m) {
-        const e = document.getElementById('error');
-        e.innerHTML = '❌ ' + m;
-        e.style.display = 'block';
-        setTimeout(() => { e.style.display = 'none'; }, 9000);
-    }
+// Buffer config tuned for a 1-hour video at ~2–4 Mbps ≈ ~900MB–1.8GB
+// Strategy: keep 90s ahead, evict 60s behind, seek by re-fetching from new position
+const CFG = {
+  SEGMENT_BYTES:   4 * 1024 * 1024,  // 4MB per fetch — enough for ~8–16s of video
+  AHEAD_TARGET:    90,                 // buffer 90s ahead of playhead
+  AHEAD_MAX:       120,                // pause fetching at 2 min ahead
+  AHEAD_RESUME:    20,                 // resume when ahead drops below 20s
+  INITIAL_PLAY_S:  5,                  // start playback after 5s buffered
+  EVICT_BEHIND_S:  60,                 // keep 60s behind playhead (for back-seek)
+  SEEK_DEBOUNCE:   300,                // ms to wait after seek before fetching
+  FETCH_TIMEOUT:   20000,              // 20s fetch timeout
+  MAX_RETRIES:     3,                  // retry failed fetches
+};
 
-    function startTokenBar(sec) {
-        const end = Date.now() + sec * 1000;
-        const bar = document.getElementById('tokenBar');
-        const lbl = document.getElementById('tokenLabel');
-        document.getElementById('tokenBarWrap').style.display = 'block';
-        bar.style.width = '100%';
-        clearInterval(_tokenTimer);
-        _tokenTimer = setInterval(async () => {
-            const rem = Math.max(0, end - Date.now());
-            bar.style.width = (rem / (sec * 1000) * 100) + '%';
-            const m = Math.floor(rem / 60000), s = Math.floor((rem % 60000) / 1000);
-            lbl.textContent = rem > 0 ? 'Token valid: ' + (m > 0 ? m + 'm ' : '') + s + 's' : 'Token expired';
-            if (rem < 5 * 60 * 1000 && rem > 0) await refreshToken();
-            if (rem <= 0) clearInterval(_tokenTimer);
-        }, 1000);
-    }
+// ═══════════════════════════════════════════════════════════════════════
+//  STATE
+// ═══════════════════════════════════════════════════════════════════════
+let vid        = null;
+let _ms        = null;   // MediaSource
+let _sb        = null;   // SourceBuffer
+let _stopped   = false;
+let _token     = null;   // session token
+let _endpoint  = null;   // stream endpoint URL
+let _totalSize = 0;      // total file bytes
+let _fetchedTo = 0;      // furthest byte we've appended
+let _pump      = false;  // pump running?
+let _seekTimer = null;
+let _retries   = 0;
+let _playStarted = false;
+let _sbQueue   = [];     // pending SourceBuffer operations (only one at a time)
+let _sbBusy    = false;
 
-    async function refreshToken() {
-        if (!_videoId || !_baseUrl) return;
-        const vid = document.getElementById('videoPlayer');
+// ═══════════════════════════════════════════════════════════════════════
+//  UTILITIES
+// ═══════════════════════════════════════════════════════════════════════
+const norm  = u => u.replace(/([^:])\\/\\/+/g,'$1/');
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+function showErr(msg) {
+  const e = document.getElementById('errBox');
+  e.innerHTML = '❌ ' + msg;
+  e.style.display = 'block';
+  setTimeout(() => { e.style.display = 'none'; }, 9000);
+}
+
+function setSpinner(on) {
+  const s = document.getElementById('spinOv');
+  if (s) s.classList.toggle('hide', !on);
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+//  BUFFER INSPECTION
+// ═══════════════════════════════════════════════════════════════════════
+function bufferedAhead() {
+  if (!vid || !vid.buffered || !vid.buffered.length) return 0;
+  const ct = vid.currentTime;
+  for (let i = 0; i < vid.buffered.length; i++) {
+    if (vid.buffered.start(i) <= ct + 0.5 && vid.buffered.end(i) > ct)
+      return vid.buffered.end(i) - ct;
+  }
+  return 0;
+}
+
+function isTimeInBuffer(t) {
+  if (!vid || !vid.buffered) return false;
+  for (let i = 0; i < vid.buffered.length; i++)
+    if (vid.buffered.start(i) <= t + 0.25 && vid.buffered.end(i) >= t + 1) return true;
+  return false;
+}
+
+function updateUI() {
+  const bar = document.getElementById('bBar');
+  const lbl = document.getElementById('bLbl');
+  if (!bar || !_totalSize) return;
+  const pct = Math.min(100, Math.round((_fetchedTo / _totalSize) * 100));
+  bar.style.width = pct + '%';
+  const ahead = bufferedAhead();
+  lbl.textContent = _fetchedTo >= _totalSize
+    ? 'Fully loaded ✓'
+    : \`Loaded \${pct}% · \${Math.round(ahead)}s ahead\`;
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+//  SOURCEBUFFER QUEUE — serialises all append/remove operations
+//  SourceBuffer allows only ONE operation at a time. Queuing prevents
+//  "InvalidStateError: An attempt was made to use an object that is not,
+//   or is no longer, usable" errors.
+// ═══════════════════════════════════════════════════════════════════════
+function sbOp(fn) {
+  return new Promise((resolve, reject) => {
+    _sbQueue.push({ fn, resolve, reject });
+    drainSBQueue();
+  });
+}
+
+function drainSBQueue() {
+  if (_sbBusy || !_sbQueue.length || !_sb || !_ms || _ms.readyState !== 'open') return;
+  if (_sb.updating) return; // will be called again on updateend
+  const { fn, resolve, reject } = _sbQueue.shift();
+  _sbBusy = true;
+  const onEnd = () => { _sbBusy = false; resolve(); drainSBQueue(); };
+  const onErr = (e) => { _sbBusy = false; reject(e); drainSBQueue(); };
+  _sb.addEventListener('updateend', onEnd,  { once: true });
+  _sb.addEventListener('error',     onErr, { once: true });
+  try { fn(); } catch (e) { _sb.removeEventListener('updateend', onEnd); onErr(e); }
+}
+
+async function sbAppend(buf) {
+  if (_stopped || !_sb || !_ms || _ms.readyState !== 'open') return false;
+  try {
+    await sbOp(() => _sb.appendBuffer(buf));
+    return true;
+  } catch (e) {
+    if (e.name === 'QuotaExceededError') {
+      await sbEvict(true); // force evict more aggressively
+      try {
+        await sbOp(() => _sb.appendBuffer(buf));
+        return true;
+      } catch (_) { return false; }
+    }
+    return false;
+  }
+}
+
+async function sbEvict(aggressive = false) {
+  if (!_sb || !vid || !_ms || _ms.readyState !== 'open') return;
+  const ct     = vid.currentTime;
+  const behind = aggressive ? Math.max(0, ct - 10) : Math.max(0, ct - CFG.EVICT_BEHIND_S);
+  if (behind <= 0) return;
+  try {
+    await sbOp(() => _sb.remove(0, behind));
+  } catch (_) {}
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+//  BYTE → TIME MAPPING
+//  We estimate which byte offset corresponds to a given second by
+//  assuming constant bitrate (good enough for seeking purposes).
+//  After seek, we fetch from that estimate and let the decoder correct.
+// ═══════════════════════════════════════════════════════════════════════
+function timeToByteOffset(seconds) {
+  if (!vid || !vid.duration || !_totalSize) return 0;
+  const fraction = Math.max(0, Math.min(1, seconds / vid.duration));
+  // Align to 4KB boundary for better cache behaviour
+  return Math.floor((fraction * _totalSize) / 4096) * 4096;
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+//  FETCH ONE SEGMENT
+//  Fetches CFG.SEGMENT_BYTES bytes starting at \`startByte\`.
+//  Returns { buf, bytesRead, eof }
+// ═══════════════════════════════════════════════════════════════════════
+async function fetchSegment(startByte) {
+  const endByte = startByte + CFG.SEGMENT_BYTES - 1;
+  const ctrl    = new AbortController();
+  const timer   = setTimeout(() => ctrl.abort(), CFG.FETCH_TIMEOUT);
+  try {
+    const res = await fetch(_endpoint, {
+      headers: {
+        'X-Session-Token': _token,
+        'Range':           \`bytes=\${startByte}-\${endByte}\`,
+        'Origin':          location.origin,
+      },
+      signal: ctrl.signal,
+    });
+    clearTimeout(timer);
+
+    if (res.status === 416) return { buf: null, bytesRead: 0, eof: true };  // past end
+    if (!res.ok && res.status !== 206) throw new Error('HTTP ' + res.status);
+
+    // Extract total file size from Content-Range header: bytes X-Y/TOTAL
+    const cr = res.headers.get('content-range') || '';
+    const totalMatch = cr.match(/\\/(\\d+)$/);
+    if (totalMatch) _totalSize = parseInt(totalMatch[1], 10);
+
+    const buf = await res.arrayBuffer();
+    const eof = _totalSize > 0 && startByte + buf.byteLength >= _totalSize;
+    return { buf, bytesRead: buf.byteLength, eof };
+  } catch (e) {
+    clearTimeout(timer);
+    throw e;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+//  PUMP — the main buffering loop
+//  Runs continuously, fetching segments ahead of playhead.
+//  Pauses when AHEAD_MAX is reached, resumes when it drops.
+//  On seek: aborts, resets _fetchedTo, restarts from new position.
+// ═══════════════════════════════════════════════════════════════════════
+async function startPump(startByte = 0) {
+  if (_pump) return;
+  _pump   = true;
+  _retries = 0;
+  let pos  = startByte;
+
+  while (!_stopped) {
+    // ── 1. Check buffer health ───────────────────────────────────────
+    const ahead = bufferedAhead();
+
+    if (pos >= _totalSize && _totalSize > 0) {
+      // All bytes fetched — signal end of stream
+      if (_ms && _ms.readyState === 'open') {
         try {
-            const r = await fetch(norm(_baseUrl + '/api/video/' + _videoId), { headers: { 'X-Security-String': SEC } });
-            if (!r.ok) return;
-            const d = await r.json();
-            if (!d.success || d.type !== 'video') return;
-            const t = vid.currentTime, playing = !vid.paused;
-            vid.src = d.streamUrl;
-            vid.load();
-            vid.currentTime = t;
-            if (playing) vid.play().catch(() => {});
+          if (!_sb.updating) _ms.endOfStream();
         } catch (_) {}
+      }
+      updateUI();
+      break;
     }
 
-    async function loadVideo() {
-        const url = document.getElementById('videoUrl').value.trim();
-        const btn = document.getElementById('loadBtn');
-        const load = document.getElementById('loadingSection');
-        const sec  = document.getElementById('videoSection');
-        const vid  = document.getElementById('videoPlayer');
-        const ifr  = document.getElementById('iframePlayer');
-
-        document.getElementById('error').style.display = 'none';
-
-        if (!url) { showErr('Please enter a URL'); return; }
-        if (isRaw(url)) { showErr('Wrong URL — paste the Platform B /video/ URL, not a direct source URL'); return; }
-        if (!url.includes('/video/')) { showErr('Invalid URL — must contain <code>/video/</code>'); return; }
-
-        sec.classList.remove('active');
-        load.style.display = 'block';
-        btn.disabled = true;
-        clearInterval(_tokenTimer);
-
-        try {
-            const m = url.match(/\\/video\\/([^/?#]+)/);
-            if (!m) throw new Error('Could not extract video ID');
-            _videoId = m[1];
-            _baseUrl = url.substring(0, url.indexOf('/video/'));
-
-            const r = await fetch(norm(_baseUrl + '/api/video/' + _videoId), {
-                headers: { 'X-Security-String': SEC, 'Accept': 'application/json' }
-            });
-            if (r.status === 403) throw new Error('Access denied — check security key');
-            if (r.status === 404) throw new Error('Video not found');
-            if (!r.ok)            throw new Error('Server error ' + r.status);
-            const data = await r.json();
-            if (!data.success)    throw new Error(data.message || 'Failed to load');
-
-            load.style.display = 'none';
-            sec.classList.add('active');
-            btn.disabled = false;
-
-            if (data.type === 'embed') {
-                ifr.src = norm(data.proxyUrl) + '?key=' + encodeURIComponent(SEC);
-                ifr.style.display = 'block';
-                vid.style.display = 'none';
-                document.getElementById('tokenBarWrap').style.display = 'none';
-                document.getElementById('tokenLabel').textContent = '';
-            } else {
-                vid.style.display = 'block';
-                ifr.style.display = 'none';
-                vid.src = data.streamUrl;
-                vid.load();
-                startTokenBar(data.tokenExpiresIn || 7200);
-            }
-        } catch (e) {
-            load.style.display = 'none';
-            btn.disabled = false;
-            showErr(e.message);
+    if (_playStarted && ahead >= CFG.AHEAD_MAX) {
+      // Buffer is healthy — pause and wait for it to drain
+      _pump = false;
+      const check = setInterval(() => {
+        if (_stopped) { clearInterval(check); return; }
+        if (bufferedAhead() < CFG.AHEAD_RESUME) {
+          clearInterval(check);
+          pos = timeToByteOffset(vid.currentTime + bufferedAhead() - 1);
+          // Clamp to what we already fetched in case of overlap
+          pos = Math.max(pos, 0);
+          startPump(pos);
         }
+      }, 1000);
+      return;
     }
 
-    function closeVideo() {
-        clearInterval(_tokenTimer);
-        const vid = document.getElementById('videoPlayer');
-        const ifr = document.getElementById('iframePlayer');
-        document.getElementById('videoSection').classList.remove('active');
-        document.getElementById('tokenBarWrap').style.display = 'none';
-        document.getElementById('tokenLabel').textContent = '';
-        if (vid) { vid.pause(); vid.removeAttribute('src'); vid.load(); }
-        if (ifr) ifr.src = '';
-        _videoId = _baseUrl = null;
+    // ── 2. Fetch next segment ────────────────────────────────────────
+    let seg;
+    try {
+      seg = await fetchSegment(pos);
+      _retries = 0;
+    } catch (e) {
+      _retries++;
+      if (_retries > CFG.MAX_RETRIES) {
+        // Give up — show error, let user retry by seeking
+        _pump = false;
+        updateUI();
+        return;
+      }
+      await sleep(Math.min(500 * _retries, 3000));
+      continue;
     }
 
-    document.addEventListener('DOMContentLoaded', () => {
-        document.getElementById('loadBtn') .addEventListener('click',   loadVideo);
-        document.getElementById('closeBtn').addEventListener('click',   closeVideo);
-        document.getElementById('videoUrl').addEventListener('keypress', e => { if (e.key === 'Enter') loadVideo(); });
-    });
+    // ── 3. Append to SourceBuffer ────────────────────────────────────
+    if (seg.buf && seg.buf.byteLength > 0) {
+      // Evict old data to free memory (keep 60s behind playhead)
+      if (pos % (CFG.SEGMENT_BYTES * 10) === 0) await sbEvict();
 
-    document.addEventListener('contextmenu', e => { e.preventDefault(); return false; });
-    document.addEventListener('keydown', e => {
-        const k = e.key.toLowerCase();
-        if ((e.ctrlKey || e.metaKey) && ['s','u','p','i','j','c'].includes(k)) { e.preventDefault(); return false; }
-        if ((e.ctrlKey || e.metaKey) && e.shiftKey && ['i','j','c'].includes(k)) { e.preventDefault(); return false; }
-        if (['f12','printscreen'].includes(k)) { e.preventDefault(); return false; }
-        if (e.metaKey && k === 'g') { e.preventDefault(); return false; }
-    });
-    document.addEventListener('dragstart', e => { e.preventDefault(); return false; });
-    document.addEventListener('visibilitychange', () => {
-        const v = document.getElementById('videoPlayer');
-        if (v && document.hidden) v.pause();
-    });
-    if (navigator.mediaDevices) {
-        try { Object.defineProperty(navigator.mediaDevices, 'getDisplayMedia', { configurable: false, writable: false, value: () => Promise.reject(new DOMException('Not allowed', 'NotAllowedError')) }); } catch (_) {}
-        try {
-            const _g = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
-            Object.defineProperty(navigator.mediaDevices, 'getUserMedia', { configurable: false, writable: false, value: c => c?.video ? Promise.reject(new DOMException('Not allowed', 'NotAllowedError')) : _g(c) });
-        } catch (_) {}
+      const ok = await sbAppend(seg.buf);
+      if (!ok) {
+        // Append failed — try evicting and continue
+        await sbEvict(true);
+        continue;
+      }
+      pos += seg.bytesRead;
+      _fetchedTo = Math.max(_fetchedTo, pos);
+
+      // ── 4. Start playback once initial buffer is ready ──────────────
+      if (!_playStarted && bufferedAhead() >= CFG.INITIAL_PLAY_S) {
+        _playStarted = true;
+        setSpinner(false);
+        vid.play().catch(() => {});
+      }
+
+      updateUI();
     }
-    try { Object.defineProperty(window, 'MediaRecorder', { configurable: false, writable: false, value: function() { throw new DOMException('Disabled', 'NotSupportedError'); } }); } catch (_) {}
-    (function() {
-        let open = false;
-        setInterval(() => {
-            const isOpen = window.outerWidth - window.innerWidth > 160 || window.outerHeight - window.innerHeight > 160;
-            const v = document.getElementById('videoPlayer'), f = document.getElementById('iframePlayer');
-            if (isOpen && !open) { open = true; if (v) { v.pause(); v.style.visibility = 'hidden'; } if (f) f.style.visibility = 'hidden'; }
-            else if (!isOpen && open) { open = false; if (v) v.style.visibility = 'visible'; if (f) f.style.visibility = 'visible'; }
-        }, 800);
-    })();
-<\/script>
+
+    if (seg.eof) {
+      if (_ms && _ms.readyState === 'open') {
+        try { if (!_sb.updating) _ms.endOfStream(); } catch (_) {}
+      }
+      updateUI();
+      break;
+    }
+  }
+
+  _pump = false;
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+//  SEEK HANDLER
+//  When user seeks: flush the SourceBuffer, restart fetch from new position
+// ═══════════════════════════════════════════════════════════════════════
+async function handleSeek() {
+  if (!vid || !_sb || !_ms) return;
+  clearTimeout(_seekTimer);
+  _seekTimer = setTimeout(async () => {
+    const seekTo = vid.currentTime;
+
+    // Is the seek destination already in the buffer?
+    if (isTimeInBuffer(seekTo)) return; // nothing to do
+
+    setSpinner(true);
+
+    // Stop current pump
+    _pump = false;
+    await sleep(50); // let any in-flight fetch finish
+
+    // Flush the SourceBuffer — clear everything except a small window around seekTo
+    if (_ms && _ms.readyState === 'open' && _sb && !_sb.updating) {
+      try {
+        // Keep 5s before seek point (for brief back-seeks) and remove rest
+        const keepFrom = Math.max(0, seekTo - 5);
+        const keepTo   = seekTo + 2; // keep a little ahead to avoid stutter
+        if (keepFrom > 0) {
+          await sbOp(() => _sb.remove(0, keepFrom));
+        }
+        // Remove far ahead (stale data past the seek point we're jumping to)
+        if (keepTo < seekTo + 5 && _totalSize > 0) {
+          const totalDuration = vid.duration || 99999;
+          if (keepTo < totalDuration - 1) {
+            try { await sbOp(() => _sb.remove(keepTo, totalDuration)); } catch (_) {}
+          }
+        }
+      } catch (_) {}
+    }
+
+    // Recalculate byte offset for seek position
+    const bytePos = timeToByteOffset(Math.max(0, seekTo - 2)); // 2s before for context
+    _fetchedTo    = bytePos;
+
+    // Restart pump from new position
+    startPump(bytePos);
+  }, CFG.SEEK_DEBOUNCE);
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+//  MAIN: START STREAM
+// ═══════════════════════════════════════════════════════════════════════
+async function startStream(endpoint, token) {
+  _endpoint    = endpoint;
+  _token       = token;
+  _stopped     = false;
+  _fetchedTo   = 0;
+  _totalSize   = 0;
+  _playStarted = false;
+  _pump        = false;
+  _sbQueue     = [];
+  _sbBusy      = false;
+
+  document.getElementById('bWrap').style.display = 'block';
+  setSpinner(true);
+
+  // ── Set up MediaSource ──────────────────────────────────────────────
+  if (_ms) { try { _ms.endOfStream(); } catch (_) {} }
+  _ms = new MediaSource();
+
+  // Give <video> a blob: URL — IDM has NOTHING to intercept
+  vid.src = URL.createObjectURL(_ms);
+
+  await new Promise((res, rej) => {
+    _ms.addEventListener('sourceopen', res, { once: true });
+    _ms.addEventListener('error',      rej, { once: true });
+  });
+
+  // Pick the best supported MIME type
+  const MIME_CANDIDATES = [
+    'video/mp4; codecs="avc1.42E01E, mp4a.40.2"',
+    'video/mp4; codecs="avc1.640028, mp4a.40.2"',
+    'video/mp4; codecs="avc1.64001F, mp4a.40.2"',
+    'video/mp4',
+  ];
+  const mimeType = MIME_CANDIDATES.find(m => MediaSource.isTypeSupported(m));
+  if (!mimeType) throw new Error('Your browser does not support MP4 streaming. Please use Chrome or Edge.');
+
+  _sb = _ms.addSourceBuffer(mimeType);
+
+  // CRITICAL: Use 'segments' mode (not 'sequence').
+  // In segments mode, the SourceBuffer respects the timestamps embedded in
+  // the MP4 fragments, which means seeking works by time not by append order.
+  // This is what makes forward/backward seeking instant and correct.
+  _sb.mode = 'segments';
+
+  // Wire SourceBuffer events to drain the queue
+  _sb.addEventListener('updateend', drainSBQueue);
+
+  // ── Wire video events ───────────────────────────────────────────────
+  vid.addEventListener('seeking',    handleSeek);
+  vid.addEventListener('timeupdate', updateUI);
+  vid.addEventListener('waiting',    () => {
+    setSpinner(true);
+    if (!_pump && !_stopped) startPump(timeToByteOffset(Math.max(0, vid.currentTime - 1)));
+  });
+  vid.addEventListener('playing',    () => setSpinner(false));
+  vid.addEventListener('canplay',    () => setSpinner(false));
+
+  // ── Start filling the buffer ────────────────────────────────────────
+  startPump(0);
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+//  LOAD VIDEO
+// ═══════════════════════════════════════════════════════════════════════
+async function loadVideo() {
+  const url  = document.getElementById('urlIn').value.trim();
+  const btn  = document.getElementById('loadBtn');
+  const load = document.getElementById('loadSec');
+  const vSec = document.getElementById('vSec');
+  vid = document.getElementById('vid');
+  const ifr = document.getElementById('ifr');
+
+  document.getElementById('errBox').style.display = 'none';
+
+  if (!url || !url.includes('/video/')) {
+    showErr('Invalid URL — must contain /video/'); return;
+  }
+
+  vSec.classList.remove('on');
+  load.style.display = 'block';
+  btn.disabled = true;
+
+  try {
+    const m = url.match(/\\/video\\/([^/?#]+)/);
+    if (!m) throw new Error('Cannot extract video ID from URL');
+    const videoId = m[1];
+    const base    = url.slice(0, url.indexOf('/video/'));
+
+    const res = await fetch(norm(base + '/api/video/' + videoId), {
+      headers: { 'X-Security-String': SEC, 'Accept': 'application/json' }
+    });
+    if (res.status === 403) throw new Error('Access denied — wrong security key');
+    if (res.status === 404) throw new Error('Video not found');
+    if (!res.ok)            throw new Error('Server error: ' + res.status);
+
+    const data = await res.json();
+    if (!data.success) throw new Error(data.message || 'Load failed');
+
+    load.style.display = 'none';
+    vSec.classList.add('on');
+    btn.disabled = false;
+
+    if (data.type === 'embed') {
+      ifr.src = norm(data.proxyUrl) + '?key=' + encodeURIComponent(SEC);
+      ifr.style.display = 'block';
+      vid.style.display = 'none';
+      document.getElementById('bWrap').style.display = 'none';
+      document.getElementById('spinOv').classList.add('hide');
+    } else {
+      vid.style.display = 'block';
+      ifr.style.display = 'none';
+      if (!data.sessionToken)    throw new Error('No session token — redeploy Platform B');
+      if (!data.streamEndpoint)  throw new Error('No stream endpoint — redeploy Platform B');
+
+      if (typeof MediaSource === 'undefined') {
+        throw new Error('MediaSource API not supported in this browser. Please use Chrome or Edge.');
+      }
+
+      await startStream(data.streamEndpoint, data.sessionToken);
+    }
+  } catch (e) {
+    load.style.display = 'none';
+    btn.disabled = false;
+    showErr(e.message);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+//  CLOSE
+// ═══════════════════════════════════════════════════════════════════════
+function closeVideo() {
+  _stopped = true;
+  _pump    = false;
+  clearTimeout(_seekTimer);
+  document.getElementById('vSec').classList.remove('on');
+  document.getElementById('bWrap').style.display = 'none';
+  document.getElementById('bLbl').textContent    = '';
+  document.getElementById('spinOv').classList.add('hide');
+  if (_ms)  { try { _ms.endOfStream(); } catch (_) {} _ms = null; _sb = null; _sbQueue = []; }
+  if (vid)  { vid.pause(); vid.removeAttribute('src'); vid.load(); }
+  const ifr = document.getElementById('ifr'); if (ifr) ifr.src = '';
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+//  EVENTS
+// ═══════════════════════════════════════════════════════════════════════
+document.getElementById('loadBtn') .addEventListener('click',    loadVideo);
+document.getElementById('closeBtn').addEventListener('click',    closeVideo);
+document.getElementById('urlIn')   .addEventListener('keypress', e => { if (e.key === 'Enter') loadVideo(); });
+
+// Auto-hide error
+new MutationObserver(() => {
+  const e = document.getElementById('errBox');
+  if (e.style.display === 'block') setTimeout(() => { e.style.display = 'none'; }, 9000);
+}).observe(document.getElementById('errBox'), { attributes: true, attributeFilter: ['style'] });
+
+// ═══════════════════════════════════════════════════════════════════════
+//  ANTI-DOWNLOAD / ANTI-RECORD
+// ═══════════════════════════════════════════════════════════════════════
+document.addEventListener('contextmenu', e => { e.preventDefault(); return false; });
+
+document.addEventListener('keydown', e => {
+  const k = e.key.toLowerCase();
+  if ((e.ctrlKey||e.metaKey) && ['s','u','p','i','j','c'].includes(k))   { e.preventDefault(); return false; }
+  if ((e.ctrlKey||e.metaKey) && e.shiftKey && ['i','j','c'].includes(k)) { e.preventDefault(); return false; }
+  if (['f12','printscreen'].includes(k))                                  { e.preventDefault(); return false; }
+  if (e.metaKey && k === 'g')                                             { e.preventDefault(); return false; }
+  if (e.metaKey && e.altKey && k === 'r')                                 { e.preventDefault(); return false; }
+});
+
+document.addEventListener('dragstart', e => { e.preventDefault(); return false; });
+
+document.addEventListener('visibilitychange', () => {
+  const v = document.getElementById('vid');
+  if (v && document.hidden) v.pause();
+});
+
+// Block screen capture APIs
+if (navigator.mediaDevices) {
+  try { Object.defineProperty(navigator.mediaDevices,'getDisplayMedia',{configurable:false,writable:false,value:()=>Promise.reject(new DOMException('Not allowed','NotAllowedError'))}); } catch(_){}
+  try {
+    const _g = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
+    Object.defineProperty(navigator.mediaDevices,'getUserMedia',{configurable:false,writable:false,value:c=>c?.video?Promise.reject(new DOMException('Not allowed','NotAllowedError')):_g(c)});
+  } catch(_){}
+}
+try { Object.defineProperty(window,'MediaRecorder',{configurable:false,writable:false,value:function(){throw new DOMException('Disabled','NotSupportedError');}}); } catch(_){}
+
+// DevTools detection
+(function(){
+  let open=false;
+  setInterval(()=>{
+    const isOpen=window.outerWidth-window.innerWidth>160||window.outerHeight-window.innerHeight>160;
+    const v=document.getElementById('vid'),f=document.getElementById('ifr');
+    if(isOpen&&!open){open=true;if(v){v.pause();v.style.visibility='hidden';}if(f)f.style.visibility='hidden';}
+    else if(!isOpen&&open){open=false;if(v)v.style.visibility='visible';if(f)f.style.visibility='visible';}
+  },800);
+})();
+</script>
 </body>
-</html>`;
-
-  res.setHeader('Content-Type', 'text/html; charset=utf-8');
-  res.status(200).send(html);
+</html>
+`);
 }
