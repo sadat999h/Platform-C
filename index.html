@@ -6,662 +6,353 @@
     <title>Platform C - Video Player Pro</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: #0a0a0a;
-            color: white;
-            min-height: 100vh;
-        }
-        .header {
-            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-            padding: 20px;
-            box-shadow: 0 2px 20px rgba(0,0,0,0.5);
-        }
-        .header-content {
-            max-width: 1400px;
-            margin: 0 auto;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-        }
-        .logo {
-            font-size: 28px;
-            font-weight: 700;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-        }
-        .status {
-            background: rgba(76, 175, 80, 0.2);
-            color: #4caf50;
-            padding: 6px 14px;
-            border-radius: 20px;
-            font-size: 12px;
-            font-weight: 600;
-        }
-        .container { max-width: 1400px; margin: 0 auto; padding: 40px 20px; }
-        .input-section {
-            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-            padding: 40px;
-            border-radius: 20px;
-            margin-bottom: 40px;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
-        }
-        .input-title {
-            font-size: 24px;
-            font-weight: 700;
-            margin-bottom: 20px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-        }
-        input[type="url"] {
-            width: 100%;
-            padding: 16px 20px;
-            background: rgba(255,255,255,0.05);
-            border: 2px solid rgba(255,255,255,0.1);
-            border-radius: 12px;
-            color: white;
-            font-size: 15px;
-            margin-bottom: 20px;
-        }
-        input:focus { outline: none; border-color: #667eea; }
-        input::placeholder { color: rgba(255,255,255,0.4); }
-        .btn {
-            padding: 16px 40px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            border: none;
-            border-radius: 12px;
-            font-size: 16px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: transform 0.2s;
-        }
-        .btn:hover:not(:disabled) { transform: translateY(-2px); }
-        .btn:disabled { opacity: 0.6; cursor: not-allowed; }
-        .video-section {
-            display: none;
-            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-            padding: 30px;
-            border-radius: 20px;
-        }
-        .video-section.active { display: block; }
-        .video-header { display: flex; justify-content: space-between; margin-bottom: 25px; align-items: center; }
-        .video-title { font-size: 22px; font-weight: 700; }
-        .close-btn {
-            padding: 10px 20px;
-            background: rgba(255,59,48,0.2);
-            color: #ff3b30;
-            border-radius: 10px;
-            cursor: pointer;
-            font-weight: 600;
-            border: none;
-        }
-        .player-wrapper {
-            position: relative;
-            padding-bottom: 56.25%;
-            height: 0;
-            background: #000;
-            border-radius: 16px;
-            overflow: hidden;
-        }
-        video, iframe {
-            position: absolute;
-            top: 0; left: 0;
-            width: 100%; height: 100%;
-            border: none;
-        }
-        .buffer-bar-wrap {
-            margin-top: 12px;
-            background: rgba(255,255,255,0.08);
-            border-radius: 6px;
-            height: 6px;
-            overflow: hidden;
-        }
-        .buffer-bar {
-            height: 100%;
-            width: 0%;
-            background: linear-gradient(90deg, #667eea, #764ba2);
-            border-radius: 6px;
-            transition: width 0.3s;
-        }
-        .buffer-label {
-            font-size: 11px;
-            color: rgba(255,255,255,0.4);
-            margin-top: 5px;
-            text-align: right;
-        }
-        .error {
-            background: rgba(244, 67, 54, 0.2);
-            padding: 16px;
-            border-radius: 12px;
-            margin-top: 20px;
-            color: #f44336;
-            border: 1px solid rgba(244, 67, 54, 0.3);
-        }
-        .loading { text-align: center; padding: 60px; color: rgba(255,255,255,0.6); }
-        .spinner {
-            border: 3px solid rgba(255,255,255,0.1);
-            border-top: 3px solid #667eea;
-            border-radius: 50%;
-            width: 50px; height: 50px;
-            animation: spin 1s linear infinite;
-            margin: 0 auto 20px;
-        }
-        @keyframes spin { 100% { transform: rotate(360deg); } }
-        .security-badge {
-            background: rgba(76, 175, 80, 0.2);
-            color: #4caf50;
-            padding: 8px 16px;
-            border-radius: 8px;
-            font-size: 12px;
-            margin-top: 15px;
-            border: 1px solid rgba(76, 175, 80, 0.3);
-        }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0a0a0a; color: #fff; min-height: 100vh; }
 
-        /* ── DRM / Anti-Download Protections ── */
-        * {
-            -webkit-user-select: none;
-            -moz-user-select: none;
-            -ms-user-select: none;
-            user-select: none;
-        }
-        input[type="url"] {
-            -webkit-user-select: text;
-            -moz-user-select: text;
-            user-select: text;
-        }
+        .header { background: linear-gradient(135deg, #1a1a2e, #16213e); padding: 20px; box-shadow: 0 2px 20px rgba(0,0,0,.5); }
+        .header-content { max-width: 1400px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; }
+        .logo { font-size: 28px; font-weight: 700; background: linear-gradient(135deg, #667eea, #764ba2); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .badge { background: rgba(76,175,80,.2); color: #4caf50; padding: 6px 14px; border-radius: 20px; font-size: 12px; font-weight: 600; }
+
+        .container { max-width: 1400px; margin: 0 auto; padding: 40px 20px; }
+
+        .card { background: linear-gradient(135deg, #1a1a2e, #16213e); border-radius: 20px; padding: 40px; margin-bottom: 32px; box-shadow: 0 10px 40px rgba(0,0,0,.3); }
+        .card-title { font-size: 24px; font-weight: 700; margin-bottom: 20px; background: linear-gradient(135deg, #667eea, #764ba2); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+
+        input[type="url"] { width: 100%; padding: 16px 20px; background: rgba(255,255,255,.05); border: 2px solid rgba(255,255,255,.1); border-radius: 12px; color: #fff; font-size: 15px; margin-bottom: 20px; transition: border-color .2s; }
+        input:focus { outline: none; border-color: #667eea; }
+        input::placeholder { color: rgba(255,255,255,.35); }
+
+        .btn { padding: 16px 40px; background: linear-gradient(135deg, #667eea, #764ba2); color: #fff; border: none; border-radius: 12px; font-size: 16px; font-weight: 600; cursor: pointer; transition: transform .2s, opacity .2s; }
+        .btn:hover:not(:disabled) { transform: translateY(-2px); }
+        .btn:disabled { opacity: .55; cursor: not-allowed; }
+
+        .sec-badge { display: inline-block; background: rgba(76,175,80,.15); color: #4caf50; border: 1px solid rgba(76,175,80,.3); padding: 7px 16px; border-radius: 8px; font-size: 12px; margin-top: 14px; }
+
+        .error { background: rgba(244,67,54,.15); border: 1px solid rgba(244,67,54,.3); color: #f44336; padding: 14px 18px; border-radius: 12px; margin-top: 16px; display: none; }
+
+        /* ── Player ── */
+        #videoSection { display: none; }
+        #videoSection.active { display: block; }
+
+        .player-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 22px; }
+        .player-title { font-size: 22px; font-weight: 700; }
+        .close-btn { padding: 9px 20px; background: rgba(255,59,48,.18); color: #ff3b30; border: 1px solid rgba(255,59,48,.25); border-radius: 10px; cursor: pointer; font-weight: 600; font-size: 14px; transition: background .2s; }
+        .close-btn:hover { background: rgba(255,59,48,.3); }
+
+        .player-wrap { position: relative; padding-bottom: 56.25%; height: 0; background: #000; border-radius: 16px; overflow: hidden; }
+        video, iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: none; }
+
+        /* Invisible overlay — blocks right-click "Save video as" on the raw surface */
+        .overlay { position: absolute; inset: 0; z-index: 10; background: transparent; pointer-events: none; }
+
+        /* Token expiry bar */
+        .token-bar-wrap { margin-top: 10px; background: rgba(255,255,255,.06); border-radius: 6px; height: 4px; overflow: hidden; }
+        .token-bar { height: 100%; background: linear-gradient(90deg, #4caf50, #8bc34a); border-radius: 6px; transition: width 10s linear; }
+        .token-label { font-size: 11px; color: rgba(255,255,255,.35); margin-top: 5px; text-align: right; }
+
+        /* Spinner */
+        #loadingSection { display: none; text-align: center; padding: 60px; color: rgba(255,255,255,.55); }
+        .spinner { width: 50px; height: 50px; border: 3px solid rgba(255,255,255,.1); border-top-color: #667eea; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 18px; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* DRM */
+        * { -webkit-user-select: none; -moz-user-select: none; user-select: none; }
+        input[type="url"] { -webkit-user-select: text; -moz-user-select: text; user-select: text; }
         video, img, iframe { -webkit-user-drag: none; user-drag: none; }
-        .video-overlay {
-            position: absolute;
-            top: 0; left: 0;
-            width: 100%; height: 100%;
-            z-index: 10;
-            background: transparent;
-            pointer-events: none;
-        }
     </style>
 </head>
 <body>
-    <div class="header">
-        <div class="header-content">
-            <div class="logo">🎬 Video Player Pro</div>
-            <div class="status">🔒 Fully Protected</div>
-        </div>
+
+<div class="header">
+    <div class="header-content">
+        <div class="logo">🎬 Video Player Pro</div>
+        <div class="badge">🔒 Fully Protected</div>
+    </div>
+</div>
+
+<div class="container">
+
+    <div class="card">
+        <div class="card-title">Load Your Secure Video</div>
+        <input type="url" id="videoUrl"
+               placeholder="Paste your Platform B video URL… (e.g. https://platform-b.vercel.app/video/abc123)">
+        <button class="btn" id="loadBtn">▶️ Load Video</button>
+        <div class="sec-badge">🛡️ Original URLs never exposed · Signed stream URLs expire in 2h</div>
+        <div class="error" id="error"></div>
     </div>
 
-    <div class="container">
-        <div class="input-section">
-            <div class="input-title">Load Your Secure Video</div>
-            <input type="url" id="videoUrl"
-                placeholder="Paste your encrypted video URL... (e.g., https://platform-b.vercel.app/video/abc123)">
-            <button class="btn" id="loadBtn">▶️ Load Video</button>
-            <div class="security-badge">🛡️ Original URLs never exposed</div>
-            <div id="error" class="error" style="display: none;"></div>
-        </div>
-
-        <div id="loadingSection" class="loading" style="display: none;">
-            <div class="spinner"></div>
-            <p>Loading secure stream...</p>
-        </div>
-
-        <div id="videoSection" class="video-section">
-            <div class="video-header">
-                <div class="video-title">Now Playing</div>
-                <button class="close-btn" id="closeBtn">✕ Close</button>
-            </div>
-            <div class="player-wrapper">
-                <video id="videoPlayer" controls playsinline
-                       controlsList="nodownload nofullscreen noremoteplayback"
-                       disablePictureInPicture
-                       oncontextmenu="return false;"></video>
-                <iframe id="iframePlayer" allowfullscreen allow="autoplay"
-                        oncontextmenu="return false;"></iframe>
-                <div class="video-overlay" oncontextmenu="return false;"></div>
-            </div>
-            <div class="buffer-bar-wrap" id="bufferWrap" style="display:none;">
-                <div class="buffer-bar" id="bufferBar"></div>
-            </div>
-            <div class="buffer-label" id="bufferLabel"></div>
-        </div>
+    <div id="loadingSection">
+        <div class="spinner"></div>
+        <p>Connecting to secure stream…</p>
     </div>
 
-    <script>
-    // Must match Platform B's MASTER_SECURITY_STRING
-    const SEC = '84418779257393762955868022673598';
+    <div id="videoSection" class="card">
+        <div class="player-header">
+            <div class="player-title">Now Playing</div>
+            <button class="close-btn" id="closeBtn">✕ Close</button>
+        </div>
+        <div class="player-wrap">
+            <video id="videoPlayer"
+                   controls playsinline preload="metadata"
+                   controlsList="nodownload nofullscreen noremoteplayback"
+                   disablePictureInPicture
+                   oncontextmenu="return false;"></video>
+            <iframe id="iframePlayer" allowfullscreen allow="autoplay"
+                    oncontextmenu="return false;"></iframe>
+            <div class="overlay" oncontextmenu="return false;"></div>
+        </div>
+        <div class="token-bar-wrap" id="tokenBarWrap" style="display:none">
+            <div class="token-bar" id="tokenBar" style="width:100%"></div>
+        </div>
+        <div class="token-label" id="tokenLabel"></div>
+    </div>
 
-    let vid = null;
-    let ifr = null;
-    let _mediaSource  = null;
-    let _sourceBuffer = null;
-    let _chunkState   = null;
-    let _stopped      = false;
+</div>
 
-    // How many seconds ahead of current playhead we want buffered before we pause fetching
-    const BUFFER_AHEAD_MAX = 60;   // stop fetching if we have 60s buffered ahead
-    const BUFFER_AHEAD_MIN = 15;   // resume fetching if buffer drops below 15s ahead
-    const INITIAL_BUFFER   = 8;    // seconds to buffer before allowing playback to start
+<script>
+// ─────────────────────────────────────────────────────────
+//  CONFIG  (must match Platform B)
+// ─────────────────────────────────────────────────────────
+const SEC = '84418779257393762955868022673598';
 
-    function normalizeUrl(url) {
-        return url.replace(/([^:])\/\/+/g, '$1/');
-    }
+let _tokenTimer  = null;   // interval that shrinks the expiry bar
+let _tokenExpiry = 0;      // ms timestamp when current token expires
 
-    // ── Fetch one chunk from Platform B ──
-    // Returns { done, nextToken, buffer }
-    async function fetchChunk(chunkUrl, chunkIndex, chunkToken) {
-        const url = chunkUrl + '?chunk=' + chunkIndex;
-        const response = await fetch(url, {
-            headers: { 'x-chunk-token': chunkToken, 'Origin': window.location.origin }
+// ─────────────────────────────────────────────────────────
+//  HELPERS
+// ─────────────────────────────────────────────────────────
+function norm(url) { return url.replace(/([^:])\/\/+/g, '$1/'); }
+
+function showErr(msg) {
+    const el = document.getElementById('error');
+    el.textContent = '❌ ' + msg;
+    el.style.display = 'block';
+    setTimeout(() => { el.style.display = 'none'; }, 8000);
+}
+
+// ─────────────────────────────────────────────────────────
+//  TOKEN EXPIRY BAR
+//  Shrinks over 2 hours so user can see the session countdown.
+//  Near expiry the player auto-refreshes the token silently.
+// ─────────────────────────────────────────────────────────
+let _videoId  = null;
+let _baseUrl  = null;
+
+function startTokenBar(expiresInSec) {
+    _tokenExpiry = Date.now() + expiresInSec * 1000;
+    const bar    = document.getElementById('tokenBar');
+    const wrap   = document.getElementById('tokenBarWrap');
+    const label  = document.getElementById('tokenLabel');
+    wrap.style.display = 'block';
+    bar.style.width    = '100%';
+
+    clearInterval(_tokenTimer);
+    _tokenTimer = setInterval(async () => {
+        const remaining = Math.max(0, _tokenExpiry - Date.now());
+        const pct       = (remaining / (expiresInSec * 1000)) * 100;
+        bar.style.width = pct + '%';
+
+        const mins = Math.floor(remaining / 60000);
+        label.textContent = remaining > 0
+            ? 'Stream token valid for ' + (mins > 0 ? mins + 'm ' : '') + Math.floor((remaining % 60000) / 1000) + 's'
+            : 'Token expired — reloading…';
+
+        // Auto-refresh token when 5 minutes remain
+        if (remaining < 5 * 60 * 1000 && remaining > 0) {
+            await refreshStreamToken();
+        }
+        if (remaining <= 0) clearInterval(_tokenTimer);
+    }, 1000);
+}
+
+// Silently refreshes the stream token and updates the video src
+// without interrupting playback (currentTime is preserved)
+async function refreshStreamToken() {
+    if (!_videoId || !_baseUrl) return;
+    const vid = document.getElementById('videoPlayer');
+    try {
+        const res  = await fetch(norm(_baseUrl + '/api/video/' + _videoId), {
+            headers: { 'X-Security-String': SEC }
         });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!data.success || data.type !== 'video') return;
 
-        if (response.status === 204) return { done: true, nextToken: null, buffer: null };
-        if (!response.ok && response.status !== 206)
-            throw new Error('Chunk ' + chunkIndex + ' failed: ' + response.status);
+        // Swap src without seeking — save position, update src, seek back
+        const wasPlaying = !vid.paused;
+        const savedTime  = vid.currentTime;
+        vid.src          = data.streamUrl;
+        vid.load();
+        vid.currentTime  = savedTime;
+        if (wasPlaying) vid.play().catch(() => {});
 
-        const nextToken   = response.headers.get('x-next-chunk-token') || '';
-        const isLastChunk = response.headers.get('x-is-last-chunk') === 'true';
-        const buffer      = await response.arrayBuffer();
-        return { done: isLastChunk || !nextToken, nextToken, buffer };
+        _tokenExpiry = Date.now() + (data.tokenExpiresIn || 7200) * 1000;
+    } catch (_) {}
+}
+
+// ─────────────────────────────────────────────────────────
+//  LOAD VIDEO
+// ─────────────────────────────────────────────────────────
+async function loadVideo() {
+    const url  = document.getElementById('videoUrl').value.trim();
+    const btn  = document.getElementById('loadBtn');
+    const load = document.getElementById('loadingSection');
+    const sec  = document.getElementById('videoSection');
+    const vid  = document.getElementById('videoPlayer');
+    const ifr  = document.getElementById('iframePlayer');
+
+    if (!url || !url.includes('/video/')) {
+        showErr('Invalid URL — must contain /video/'); return;
     }
 
-    // ── Append a buffer to SourceBuffer safely ──
-    async function appendToSourceBuffer(buffer) {
-        if (_stopped || !_sourceBuffer || !_mediaSource || _mediaSource.readyState !== 'open') return;
-        if (_sourceBuffer.updating) {
-            await new Promise((res, rej) => {
-                _sourceBuffer.addEventListener('updateend', res, { once: true });
-                _sourceBuffer.addEventListener('error', rej,   { once: true });
-            });
-        }
-        await new Promise((resolve, reject) => {
-            _sourceBuffer.addEventListener('updateend', resolve, { once: true });
-            _sourceBuffer.addEventListener('error',     reject,  { once: true });
-            try {
-                _sourceBuffer.appendBuffer(buffer);
-            } catch (e) {
-                // QuotaExceededError — evict old buffered data behind playhead then retry
-                if (e.name === 'QuotaExceededError') {
-                    try {
-                        const currentTime = vid ? vid.currentTime : 0;
-                        const evictEnd = Math.max(0, currentTime - 30); // keep last 30s
-                        if (evictEnd > 0) {
-                            _sourceBuffer.remove(0, evictEnd);
-                            _sourceBuffer.addEventListener('updateend', () => {
-                                try { _sourceBuffer.appendBuffer(buffer); } catch (_) { resolve(); }
-                            }, { once: true });
-                        } else {
-                            resolve(); // can't evict, skip this chunk
-                        }
-                    } catch (_) { resolve(); }
-                } else {
-                    reject(e);
-                }
-            }
+    // Reset
+    document.getElementById('error').style.display = 'none';
+    sec.classList.remove('active');
+    load.style.display = 'block';
+    btn.disabled = true;
+    clearInterval(_tokenTimer);
+
+    try {
+        const m = url.match(/\/video\/([^/?#]+)/);
+        if (!m) throw new Error('Could not extract video ID');
+        _videoId = m[1];
+        _baseUrl = url.substring(0, url.indexOf('/video/'));
+
+        const res = await fetch(norm(_baseUrl + '/api/video/' + _videoId), {
+            headers: { 'X-Security-String': SEC, 'Content-Type': 'application/json' }
         });
-    }
+        if (res.status === 403) throw new Error('Access denied — check security key');
+        if (res.status === 404) throw new Error('Video not found');
+        if (!res.ok)            throw new Error('Server error ' + res.status);
 
-    // ── How many seconds are buffered ahead of current playhead ──
-    function getBufferedAhead() {
-        if (!vid || !vid.buffered || vid.buffered.length === 0) return 0;
-        const currentTime = vid.currentTime;
-        for (let i = 0; i < vid.buffered.length; i++) {
-            if (vid.buffered.start(i) <= currentTime + 0.5 && vid.buffered.end(i) > currentTime) {
-                return vid.buffered.end(i) - currentTime;
-            }
+        const data = await res.json();
+        if (!data.success) throw new Error(data.message || 'Failed to load');
+
+        load.style.display = 'none';
+        sec.classList.add('active');
+        btn.disabled = false;
+
+        if (data.type === 'embed') {
+            // YouTube / Vimeo / Dailymotion
+            ifr.src = norm(data.proxyUrl) + '?key=' + encodeURIComponent(SEC);
+            ifr.style.display = 'block';
+            vid.style.display = 'none';
+            document.getElementById('tokenBarWrap').style.display = 'none';
+            document.getElementById('tokenLabel').textContent     = '';
+
+        } else {
+            // Direct video — set src directly, browser handles ALL byte-range requests
+            // This is native streaming: instant seek, no JS buffering loops, no chunk math
+            vid.style.display = 'block';
+            ifr.style.display = 'none';
+            vid.src           = data.streamUrl;
+            vid.load();
+
+            startTokenBar(data.tokenExpiresIn || 7200);
         }
-        return 0;
+
+    } catch (e) {
+        load.style.display = 'none';
+        btn.disabled = false;
+        showErr(e.message);
     }
+}
 
-    // ── Main streaming engine ──
-    // Pre-fetches the next chunk WHILE the current one is being appended.
-    // Pauses fetching when buffer is healthy, resumes when it drains.
-    async function startChunkedStream(chunkUrl, firstChunkToken, streamToken, infoUrl) {
-        _stopped = false;
+// ─────────────────────────────────────────────────────────
+//  CLOSE VIDEO
+// ─────────────────────────────────────────────────────────
+function closeVideo() {
+    clearInterval(_tokenTimer);
+    const vid = document.getElementById('videoPlayer');
+    const ifr = document.getElementById('iframePlayer');
+    document.getElementById('videoSection').classList.remove('active');
+    document.getElementById('tokenBarWrap').style.display = 'none';
+    document.getElementById('tokenLabel').textContent     = '';
+    if (vid) { vid.pause(); vid.removeAttribute('src'); vid.load(); }
+    if (ifr) ifr.src = '';
+    _videoId = _baseUrl = null;
+}
 
-        const bufWrap  = document.getElementById('bufferWrap');
-        const bufBar   = document.getElementById('bufferBar');
-        const bufLabel = document.getElementById('bufferLabel');
+// ─────────────────────────────────────────────────────────
+//  EVENT LISTENERS
+// ─────────────────────────────────────────────────────────
+document.getElementById('loadBtn') .addEventListener('click',   loadVideo);
+document.getElementById('closeBtn').addEventListener('click',   closeVideo);
+document.getElementById('videoUrl').addEventListener('keypress', e => { if (e.key === 'Enter') loadVideo(); });
 
-        // Get total info for progress bar
-        let totalChunks = null;
-        try {
-            const infoRes = await fetch(infoUrl, {
-                headers: { 'x-stream-token': streamToken, 'Origin': window.location.origin }
-            });
-            if (infoRes.ok) {
-                const info = await infoRes.json();
-                if (info.totalChunks) totalChunks = info.totalChunks;
-            }
-        } catch (_) {}
+// ─────────────────────────────────────────────────────────
+//  ANTI-DOWNLOAD / ANTI-RECORD PROTECTIONS
+// ─────────────────────────────────────────────────────────
 
-        bufWrap.style.display = 'block';
-        bufLabel.textContent  = 'Connecting...';
+// 1. Block right-click everywhere
+document.addEventListener('contextmenu', e => { e.preventDefault(); return false; });
 
-        // Set up MediaSource
-        if (_mediaSource) { try { _mediaSource.endOfStream(); } catch (_) {} }
-        _mediaSource = new MediaSource();
-        vid.src = URL.createObjectURL(_mediaSource);
-        vid.preload = 'auto';
+// 2. Block keyboard shortcuts (download, inspect, print, screenshot)
+document.addEventListener('keydown', e => {
+    const k = e.key.toLowerCase();
+    if ((e.ctrlKey || e.metaKey) && ['s','u','p','i','j','c'].includes(k)) { e.preventDefault(); return false; }
+    if ((e.ctrlKey || e.metaKey) && e.shiftKey && ['i','j','c'].includes(k)) { e.preventDefault(); return false; }
+    if (['f12','printscreen'].includes(k)) { e.preventDefault(); return false; }
+    if (e.metaKey && k === 'g') { e.preventDefault(); return false; }  // Win+G game bar
+    if (e.metaKey && e.altKey && k === 'r') { e.preventDefault(); return false; } // Win+Alt+R recording
+});
 
-        await new Promise((resolve, reject) => {
-            _mediaSource.addEventListener('sourceopen', resolve, { once: true });
-            _mediaSource.addEventListener('error', reject,       { once: true });
+// 3. Block drag-to-desktop
+document.addEventListener('dragstart', e => { e.preventDefault(); return false; });
+
+// 4. Pause video when tab is hidden (prevents background capture tools)
+document.addEventListener('visibilitychange', () => {
+    const v = document.getElementById('videoPlayer');
+    if (v && document.hidden) v.pause();
+});
+
+// 5. Block screen capture APIs (used by browser extensions)
+if (navigator.mediaDevices) {
+    try {
+        Object.defineProperty(navigator.mediaDevices, 'getDisplayMedia', {
+            configurable: false, writable: false,
+            value: () => Promise.reject(new DOMException('Not allowed', 'NotAllowedError'))
         });
-
-        // Pick MIME type — try with codecs first, fall back to plain video/mp4
-        const mimeTypes = [
-            'video/mp4; codecs="avc1.42E01E, mp4a.40.2"',
-            'video/mp4; codecs="avc1.64001f, mp4a.40.2"',
-            'video/mp4'
-        ];
-        let mimeType = mimeTypes.find(m => MediaSource.isTypeSupported(m));
-        if (!mimeType) throw new Error('MSE_UNSUPPORTED');
-
-        _sourceBuffer = _mediaSource.addSourceBuffer(mimeType);
-        _sourceBuffer.mode = 'sequence';
-
-        _chunkState = {
-            chunkUrl,
-            currentToken: firstChunkToken,
-            chunkIndex: 0,
-            totalChunks,
-            done: false,
-            fetching: false,
-            prefetchedChunk: null  // { buffer, nextToken, done } — next chunk ready to append
-        };
-
-        let playbackStarted = false;
-
-        // ── Buffer health monitor ──
-        // Watches bufferedAhead and auto-pauses/resumes fetching
-        // Also handles the "waiting" event to restart pumping if the video stalls
-        function updateBufferUI() {
-            if (!totalChunks) return;
-            const pct = Math.min(100, Math.round((_chunkState.chunkIndex / totalChunks) * 100));
-            bufBar.style.width = pct + '%';
-            const ahead = getBufferedAhead();
-            if (_chunkState.done) {
-                bufLabel.textContent = 'Fully loaded ✓';
-            } else {
-                bufLabel.textContent = 'Buffered: ' + pct + '% (' + Math.round(ahead) + 's ahead)';
-            }
-        }
-
-        vid.addEventListener('waiting', () => {
-            // Video stalled — kick the pump if it's paused due to full buffer
-            if (!_chunkState.fetching && !_chunkState.done && !_stopped) {
-                pump();
-            }
+    } catch (_) {}
+    try {
+        const _gum = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
+        Object.defineProperty(navigator.mediaDevices, 'getUserMedia', {
+            configurable: false, writable: false,
+            value: c => (c?.video)
+                ? Promise.reject(new DOMException('Not allowed', 'NotAllowedError'))
+                : _gum(c)
         });
+    } catch (_) {}
+}
 
-        vid.addEventListener('timeupdate', updateBufferUI);
-
-        // ── Core pump: fetch → append → pre-fetch next → loop ──
-        async function pump() {
-            if (_stopped || _chunkState.done || _chunkState.fetching) return;
-            _chunkState.fetching = true;
-
-            try {
-                while (!_stopped && !_chunkState.done) {
-                    const ahead = getBufferedAhead();
-
-                    // If buffer is healthy and we've started playback, pause fetching
-                    if (playbackStarted && ahead >= BUFFER_AHEAD_MAX) {
-                        _chunkState.fetching = false;
-                        // Resume when buffer drains — checked via 'waiting' event and a poll
-                        const resumeCheck = setInterval(() => {
-                            if (_stopped || _chunkState.done) { clearInterval(resumeCheck); return; }
-                            if (getBufferedAhead() < BUFFER_AHEAD_MIN) {
-                                clearInterval(resumeCheck);
-                                pump();
-                            }
-                        }, 2000);
-                        return;
-                    }
-
-                    // Use pre-fetched chunk if available, otherwise fetch now
-                    let chunkData;
-                    if (_chunkState.prefetchedChunk) {
-                        chunkData = _chunkState.prefetchedChunk;
-                        _chunkState.prefetchedChunk = null;
-                    } else {
-                        chunkData = await fetchChunk(
-                            _chunkState.chunkUrl,
-                            _chunkState.chunkIndex,
-                            _chunkState.currentToken
-                        );
-                    }
-
-                    // Start pre-fetching NEXT chunk in parallel while we append this one
-                    let prefetchPromise = null;
-                    if (!chunkData.done && chunkData.nextToken) {
-                        prefetchPromise = fetchChunk(
-                            _chunkState.chunkUrl,
-                            _chunkState.chunkIndex + 1,
-                            chunkData.nextToken
-                        ).then(c => { _chunkState.prefetchedChunk = c; }).catch(() => {});
-                    }
-
-                    // Append current chunk
-                    if (chunkData.buffer && chunkData.buffer.byteLength > 0) {
-                        await appendToSourceBuffer(chunkData.buffer);
-                    }
-
-                    _chunkState.chunkIndex++;
-                    _chunkState.currentToken = chunkData.nextToken;
-                    _chunkState.done = chunkData.done;
-
-                    updateBufferUI();
-
-                    // Allow playback to start once we have enough initial buffer
-                    if (!playbackStarted && getBufferedAhead() >= INITIAL_BUFFER) {
-                        playbackStarted = true;
-                        bufLabel.textContent = 'Playing...';
-                        vid.play().catch(() => {});
-                    }
-
-                    // Wait for pre-fetch to complete before next iteration
-                    if (prefetchPromise) await prefetchPromise;
-                }
-
-                // All chunks done
-                if (!_stopped && _mediaSource && _mediaSource.readyState === 'open') {
-                    try { _mediaSource.endOfStream(); } catch (_) {}
-                }
-                updateBufferUI();
-
-            } catch (e) {
-                _chunkState.fetching = false;
-                if (!_stopped) {
-                    // Network error — retry after 2 seconds
-                    bufLabel.textContent = 'Retrying...';
-                    setTimeout(() => { if (!_stopped) pump(); }, 2000);
-                }
-            }
-        }
-
-        // Start pumping immediately
-        pump();
-    }
-
-    async function loadVideo() {
-        const url  = document.getElementById('videoUrl').value.trim();
-        const err  = document.getElementById('error');
-        const load = document.getElementById('loadingSection');
-        const sec  = document.getElementById('videoSection');
-        vid = document.getElementById('videoPlayer');
-        ifr = document.getElementById('iframePlayer');
-        const btn  = document.getElementById('loadBtn');
-
-        if (!url || !url.includes('/video/')) {
-            err.textContent = '❌ Invalid URL — must contain /video/';
-            err.style.display = 'block';
-            return;
-        }
-
-        err.style.display = 'none';
-        sec.classList.remove('active');
-        load.style.display = 'block';
-        btn.disabled = true;
-
-        try {
-            const videoMatch = url.match(/\/video\/([^/?#]+)/);
-            if (!videoMatch) throw new Error('Could not extract video ID from URL');
-
-            const videoId = videoMatch[1];
-            const baseUrl = url.substring(0, url.indexOf('/video/'));
-            const apiUrl  = normalizeUrl(baseUrl + '/api/video/' + videoId);
-
-            const res = await fetch(apiUrl, {
-                method: 'GET',
-                headers: { 'X-Security-String': SEC, 'Content-Type': 'application/json' }
-            });
-
-            if (!res.ok) {
-                if (res.status === 403) throw new Error('Access denied — check your security key');
-                if (res.status === 404) throw new Error('Video not found');
-                throw new Error('Failed to load video (Status: ' + res.status + ')');
-            }
-
-            const data = await res.json();
-            if (!data.success) throw new Error(data.message || 'Failed to load video');
-
-            load.style.display = 'none';
-            sec.classList.add('active');
-            btn.disabled = false;
-
-            if (data.type === 'embed') {
-                ifr.src = normalizeUrl(data.proxyUrl) + '?key=' + encodeURIComponent(SEC);
-                ifr.style.display = 'block';
-                vid.style.display = 'none';
-                document.getElementById('bufferWrap').style.display = 'none';
-
-            } else {
-                vid.style.display = 'block';
-                ifr.style.display = 'none';
-
-                const chunkUrl       = normalizeUrl(data.chunkUrl);
-                const firstChunkToken = data.firstChunkToken;
-                const streamToken    = data.streamToken;
-                const infoUrl        = normalizeUrl(baseUrl + '/api/info/' + videoId);
-
-                if (!firstChunkToken || !streamToken) {
-                    throw new Error('Missing tokens from server — update Platform B');
-                }
-
-                // Try MediaSource chunked player first
-                if (typeof MediaSource !== 'undefined' && MediaSource.isTypeSupported('video/mp4')) {
-                    try {
-                        await startChunkedStream(chunkUrl, firstChunkToken, streamToken, infoUrl);
-                    } catch (mseErr) {
-                        if (mseErr.message === 'MSE_UNSUPPORTED') {
-                            // Fallback: use token URL directly (still short-lived token)
-                            vid.src = chunkUrl + '?chunk=0&chunkToken=' + encodeURIComponent(firstChunkToken);
-                            vid.load();
-                        } else {
-                            throw mseErr;
-                        }
-                    }
-                } else {
-                    // Browser doesn't support MediaSource — use token URL directly
-                    vid.src = chunkUrl + '?chunk=0&chunkToken=' + encodeURIComponent(firstChunkToken);
-                    vid.load();
-                }
-            }
-
-        } catch (e) {
-            load.style.display = 'none';
-            err.textContent = '❌ ' + e.message;
-            err.style.display = 'block';
-            btn.disabled = false;
-        }
-    }
-
-    function closeVideo() {
-        _stopped = true;
-        document.getElementById('videoSection').classList.remove('active');
-        document.getElementById('bufferWrap').style.display = 'none';
-        document.getElementById('bufferLabel').textContent = '';
-        if (_mediaSource) {
-            try { _mediaSource.endOfStream(); } catch (_) {}
-            _mediaSource = null;
-            _sourceBuffer = null;
-        }
-        if (_chunkState) { _chunkState.done = true; _chunkState = null; }
-        if (vid) { vid.pause(); vid.src = ''; }
-        if (ifr) { ifr.src = ''; }
-    }
-
-    document.getElementById('loadBtn').addEventListener('click', loadVideo);
-    document.getElementById('closeBtn').addEventListener('click', closeVideo);
-    document.getElementById('videoUrl').addEventListener('keypress', function (e) {
-        if (e.key === 'Enter') loadVideo();
+// 6. Disable MediaRecorder (in-browser recording)
+try {
+    Object.defineProperty(window, 'MediaRecorder', {
+        configurable: false, writable: false,
+        value: function() { throw new DOMException('Disabled', 'NotSupportedError'); }
     });
+} catch (_) {}
 
-    const errorEl = document.getElementById('error');
-    const observer = new MutationObserver(function () {
-        if (errorEl.style.display === 'block') {
-            setTimeout(() => { errorEl.style.display = 'none'; }, 6000);
+// 7. DevTools detection — hide and pause video if DevTools open
+(function() {
+    const THRESHOLD = 160;
+    let devOpen = false;
+    setInterval(() => {
+        const open = window.outerWidth  - window.innerWidth  > THRESHOLD
+                  || window.outerHeight - window.innerHeight > THRESHOLD;
+        const v = document.getElementById('videoPlayer');
+        const f = document.getElementById('iframePlayer');
+        if (open && !devOpen) {
+            devOpen = true;
+            if (v) { v.pause(); v.style.visibility = 'hidden'; }
+            if (f) f.style.visibility = 'hidden';
+        } else if (!open && devOpen) {
+            devOpen = false;
+            if (v) v.style.visibility = 'visible';
+            if (f) f.style.visibility = 'visible';
         }
-    });
-    observer.observe(errorEl, { attributes: true, attributeFilter: ['style'] });
-
-    // ─────────────────────────────────────────────
-    //  DRM / Anti-Download / Anti-Record Protections
-    // ─────────────────────────────────────────────
-
-    document.addEventListener('contextmenu', e => { e.preventDefault(); return false; });
-
-    document.addEventListener('keydown', function (e) {
-        const key = e.key.toLowerCase();
-        if ((e.ctrlKey || e.metaKey) && ['s','u','p','i','j','c'].includes(key)) {
-            e.preventDefault(); return false;
-        }
-        if ((e.ctrlKey || e.metaKey) && e.shiftKey && ['i','j','c'].includes(key)) {
-            e.preventDefault(); return false;
-        }
-        if (e.key === 'F12' || e.key === 'PrintScreen') {
-            e.preventDefault(); return false;
-        }
-    });
-
-    document.addEventListener('dragstart', e => { e.preventDefault(); return false; });
-
-    (function detectDevTools() {
-        const threshold = 160;
-        function check() {
-            const wDiff = window.outerWidth  - window.innerWidth;
-            const hDiff = window.outerHeight - window.innerHeight;
-            const v = document.getElementById('videoPlayer');
-            const f = document.getElementById('iframePlayer');
-            if (wDiff > threshold || hDiff > threshold) {
-                if (v && !v.paused) v.pause();
-                if (v) v.style.visibility = 'hidden';
-                if (f) f.style.visibility = 'hidden';
-            } else {
-                if (v) v.style.visibility = 'visible';
-                if (f) f.style.visibility = 'visible';
-            }
-        }
-        setInterval(check, 1000);
-    })();
-
-    if (window.MediaRecorder) window.MediaRecorder = undefined;
-
-    if (navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia) {
-        navigator.mediaDevices.getDisplayMedia = () =>
-            Promise.reject(new DOMException('Screen capture is disabled.', 'NotAllowedError'));
-    }
-
-    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-        const _orig = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
-        navigator.mediaDevices.getUserMedia = function (c) {
-            if (c && c.video)
-                return Promise.reject(new DOMException('Video capture is disabled.', 'NotAllowedError'));
-            return _orig(c);
-        };
-    }
-    </script>
+    }, 800);
+})();
+</script>
 </body>
 </html>
